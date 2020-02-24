@@ -11,7 +11,7 @@ import com.pengzhaopeng.utils.JodaTimeUtil
 object TestSpark {
   def main(args: Array[String]): Unit = {
 
-    val time: Long = JodaTimeUtil.getEndOfDay()
-    println(time)
+//    val time: Long = JodaTimeUtil.getEndOfDay()
+//    println(time)
   }
 }
