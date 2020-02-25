@@ -6,12 +6,15 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Date;
 
-public  class JodaTimeUtil {
+/**
+ * https://www.cnblogs.com/Jacian/p/11120241.html
+ */
+public class JodaTimeUtil {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(JodaTimeUtil.class);
 
     public static void main(String[] args) {
-        System.out.println(getStartOfDay());
+        System.out.println(formatDateToString(1577030400000L));
     }
 
     private JodaTimeUtil() {
@@ -22,6 +25,15 @@ public  class JodaTimeUtil {
     }
 
     private static final String defaultFormat = "yyyy-MM-dd HH:mm:ss";
+
+    /**
+     * 获取字符串的时间戳（毫秒级）
+     */
+    public static long getStrTimeMillis(String timeStr) {
+        if (StringUtil.isEmpty(timeStr)) return -1;
+        DateTime dateTime = new DateTime(timeStr);
+        return dateTime.getMillis();
+    }
 
     /**
      * 获取当前系统的时间（毫秒级）
