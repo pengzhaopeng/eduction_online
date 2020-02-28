@@ -11,6 +11,7 @@
         <module>common</module>
         <module>analysis</module>
         <module>mock_data</module>
+        <module>etl_data</module>
     </modules>
     <packaging>pom</packaging>
 
