@@ -8,6 +8,6 @@ package com.pengzhaopeng.test
   */
 class SS {
   def main(args: Array[String]): Unit = {
-    val str = "版本2"
+    val str = "版本3"
   }
 }
