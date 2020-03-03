@@ -31,10 +31,13 @@ object UserBehaviorCleaner {
     // 通过输入路径获取RDD
     val eventRDD: RDD[String] = sc.textFile(inputPath)
 
+    val filterRDD: RDD[String] = eventRDD.filter(event => checkEventValid(event))
+
     //清晰数据
-    eventRDD.filter(event => checkEventValid(event)) //验证数据有效性
+    filterRDD.filter(event => checkEventValid(event)) //验证数据有效性
       .map(event => maskPhone(event)) //手机号脱敏
       .map(event => repairUserName(event)) //修改userName中带有\n导致的换行
+      .coalesce(3)
       .saveAsTextFile(outputPath)
     //停止
     sc.stop()
