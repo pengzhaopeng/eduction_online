@@ -1,7 +1,9 @@
 package com.pengzhaopeng.user_behavior
 
+import com.pengzhaopeng.bean.UserBehavior
 import com.pengzhaopeng.utils.StringUtil
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.{SparkConf, SparkContext}
 
 /**
@@ -26,21 +28,47 @@ object UserBehaviorCleaner {
     val outputPath: String = args(1)
 
     val conf: SparkConf = new SparkConf().setAppName(this.getClass.getSimpleName)
-    val sc = new SparkContext(conf)
+    //    val sc = new SparkContext(conf)
+    val spark: SparkSession = SparkSession
+      .builder()
+      .config(conf)
+      .getOrCreate()
+
+    import spark.implicits._
 
     // 通过输入路径获取RDD
-    val eventRDD: RDD[String] = sc.textFile(inputPath)
+    val eventRDD: RDD[String] = spark.sparkContext.textFile(inputPath)
 
     val filterRDD: RDD[String] = eventRDD.filter(event => checkEventValid(event))
 
     //清晰数据
-    filterRDD.filter(event => checkEventValid(event)) //验证数据有效性
+    //    filterRDD.filter(event => checkEventValid(event)) //验证数据有效性
+    //      .map(event => maskPhone(event)) //手机号脱敏
+    //      .map(event => repairUserName(event)) //修改userName中带有\n导致的换行
+    //      .coalesce(3)
+    //      .saveAsTextFile(outputPath)
+
+    //清洗数据转换成 DF
+    val resultDF: DataFrame = filterRDD.filter(event => checkEventValid(event)) //验证数据有效性
       .map(event => maskPhone(event)) //手机号脱敏
       .map(event => repairUserName(event)) //修改userName中带有\n导致的换行
+      .map(item => {
+      val attr: Array[String] = item.split("\t")
+      UserBehavior(attr(0).trim, attr(1).trim, attr(2).trim, attr(3).toInt, attr(4).toInt,
+        attr(5).trim, attr(6).trim, attr(7).trim, attr(8).trim,
+        attr(9).trim, attr(10).toInt, attr(11).toInt, attr(12).toInt,
+        attr(13).toInt, attr(14).trim, attr(15).trim, attr(16).toInt)
+    })
+      .toDF()
       .coalesce(3)
-      .saveAsTextFile(outputPath)
+
+    //DF写入到HDFS
+    //为什么不直接写入到 hive,怕清洗很久写出去的时候挂了
+    resultDF.show()
+//    resultDF.write.orc(outputPath)
+
     //停止
-    sc.stop()
+    spark.stop
   }
 
   /**
