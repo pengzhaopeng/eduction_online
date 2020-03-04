@@ -27,7 +27,9 @@ object UserBehaviorCleaner {
     val inputPath: String = args(0)
     val outputPath: String = args(1)
 
-    val conf: SparkConf = new SparkConf().setAppName(this.getClass.getSimpleName)
+    val conf: SparkConf = new SparkConf()
+      .setAppName(this.getClass.getSimpleName)
+      .setMaster("local[2]")
     //    val sc = new SparkContext(conf)
     val spark: SparkSession = SparkSession
       .builder()
@@ -37,7 +39,9 @@ object UserBehaviorCleaner {
     import spark.implicits._
 
     // 通过输入路径获取RDD
+    //https://blog.csdn.net/ice_kind/article/details/79773222
     val eventRDD: RDD[String] = spark.sparkContext.textFile(inputPath)
+//    val eventRDD: RDD[String] = spark.sparkContext.newAPIHadoopFile(inputPath,classOf[LzoTextInputFormat])
 
     val filterRDD: RDD[String] = eventRDD.filter(event => checkEventValid(event))
 
@@ -95,13 +99,16 @@ object UserBehaviorCleaner {
   def maskPhone(event: String) = {
     var maskPhone = new StringBuilder
     val fields: Array[String] = event.split("\t")
-    val phone: String = fields(9)
 
+    // 取出手机号
+    val phone = fields(9)
+
+    // 手机号不为空时做掩码处理
     if (StringUtil.isNotEmpty(phone)) {
-      maskPhone.append(phone.substring(0, 3))
-        .append("xxxx")
-        .append(phone.substring(7, 11))
+      maskPhone = maskPhone.append(phone.substring(0, 3)).append("xxxx").append(phone.substring(7, 11))
+      fields(9) = maskPhone.toString()
     }
+
     fields.mkString("\t")
   }
 
