@@ -42,3 +42,24 @@ case class UserBehavior(
                          event_key: String,
                          event_time: Int
                        )
+
+case class UserBehavior1(
+                         uid: Int,
+                         username: String,
+                         gender: String,
+                         level: String,
+                         is_vip: String,
+                         os: String,
+                         channel: String,
+                         net_config: String,
+                         ip: String,
+                         phone: String,
+                         video_id: String,
+                         video_length: String,
+                         start_video_time: String,
+                         end_video_time: String,
+                         version: String,
+                         event_key: String,
+                         event_time: String
+                       )
+

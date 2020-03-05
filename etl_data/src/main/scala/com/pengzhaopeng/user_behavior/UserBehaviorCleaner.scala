@@ -1,6 +1,6 @@
 package com.pengzhaopeng.user_behavior
 
-import com.pengzhaopeng.bean.UserBehavior
+import com.pengzhaopeng.bean.{UserBehavior, UserBehavior1}
 import com.pengzhaopeng.utils.StringUtil
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{DataFrame, SparkSession}
@@ -58,10 +58,10 @@ object UserBehaviorCleaner {
       .map(event => repairUserName(event)) //修改userName中带有\n导致的换行
       .map(item => {
       val attr: Array[String] = item.split("\t")
-      UserBehavior(attr(0).trim, attr(1).trim, attr(2).trim, attr(3).toInt, attr(4).toInt,
+      UserBehavior1(attr(0).toInt, attr(1).trim, attr(2).trim, attr(3).trim, attr(4).trim,
         attr(5).trim, attr(6).trim, attr(7).trim, attr(8).trim,
-        attr(9).trim, attr(10).toInt, attr(11).toInt, attr(12).toInt,
-        attr(13).toInt, attr(14).trim, attr(15).trim, attr(16).toInt)
+        attr(9).trim, attr(10).trim, attr(11).trim, attr(12).trim,
+        attr(13).trim, attr(14).trim, attr(15).trim, attr(16).trim)
     })
       .toDF()
       .coalesce(3)
@@ -69,7 +69,7 @@ object UserBehaviorCleaner {
     //DF写入到HDFS
     //为什么不直接写入到 hive,怕清洗很久写出去的时候挂了
     resultDF.show()
-//    resultDF.write.orc(outputPath)
+    resultDF.write.orc(outputPath)
 
     //停止
     spark.stop
