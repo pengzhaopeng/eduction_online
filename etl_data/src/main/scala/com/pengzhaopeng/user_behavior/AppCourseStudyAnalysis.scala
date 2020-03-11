@@ -11,6 +11,7 @@ import org.apache.spark.sql.SparkSession
   * @description 课程指标反馈统计
   */
 object AppCourseStudyAnalysis {
+
   def main(args: Array[String]): Unit = {
 
     //验证参数-日期
@@ -32,10 +33,57 @@ object AppCourseStudyAnalysis {
       .getOrCreate()
 
     //创建临时表，目的是防止分析完的数据直接导入 MySQL 失败那就白分析了
-//    spark.sql(
-//      s"""
-//         |select * from education_online.user_behavior limit 10
-//       """.stripMargin).show()
+
+    //1、课程学习反馈指标
+//    appCourseStudyAnalysis(day, spark)
+
+    //2、各系统版本访问统计
+    appVersionAnalysis(day,spark)
+
+    //停止
+    spark.stop()
+  }
+
+  /**
+    * 各系统版本访问统计
+    * @param day
+    * @param spark
+    * @return
+    */
+  private def appVersionAnalysis(day: String, spark: SparkSession) = {
+    //建表
+    spark.sql(
+      s"""
+         |create table if not exists education_online.tmp_app_version_analysis_${day}(
+         |	os string,
+         |	version string,
+         |	access_count int,
+         |	dt int
+         |)row format delimited fields terminated by '\t'
+         |location '/warehouse/education_online/tmp/tmp_app_version_analysis_${day}'
+       """.stripMargin)
+    //导入表
+    spark.sql(
+      s"""
+         |insert overwrite table education_online.tmp_app_version_analysis_${day}
+         |select
+         |	os,
+         |	version,
+         |	count(1) access_count,
+         |	dt
+         |from education_online.user_behavior
+         |where dt=${day}
+         |group by os,version,dt
+       """.stripMargin)
+  }
+
+  /**
+    * 课程学习反馈指标
+    * @param day 日期
+    * @param spark
+    * @return
+    */
+  private def appCourseStudyAnalysis(day: String, spark: SparkSession) = {
     //建表
     spark.sql(
       s"""
@@ -80,7 +128,5 @@ object AppCourseStudyAnalysis {
          |group by dt
        """.stripMargin)
 
-    //停止
-    spark.stop()
   }
 }
