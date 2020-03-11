@@ -35,7 +35,7 @@ object AppCourseStudyAnalysis {
     //创建临时表，目的是防止分析完的数据直接导入 MySQL 失败那就白分析了
 
     //1、课程学习反馈指标
-//    appCourseStudyAnalysis(day, spark)
+//    appCourseStudyAnalysis(day, spark)11
 
     //2、各系统版本访问统计
     appVersionAnalysis(day,spark)
