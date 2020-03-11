@@ -29,7 +29,7 @@ object UserBehaviorCleaner {
 
     val conf: SparkConf = new SparkConf()
       .setAppName(this.getClass.getSimpleName)
-      .setMaster("local[2]")
+//      .setMaster("local[2]")
     //    val sc = new SparkContext(conf)
     val spark: SparkSession = SparkSession
       .builder()
@@ -68,7 +68,7 @@ object UserBehaviorCleaner {
 
     //DF写入到HDFS
     //为什么不直接写入到 hive,怕清洗很久写出去的时候挂了
-    resultDF.show()
+//    resultDF.show()
     resultDF.write.orc(outputPath)
 
     //停止
