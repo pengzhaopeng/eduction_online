@@ -60,6 +60,7 @@
                             <!--<mainClass>com.atguigu.data_monitor.GeneratorUserBehaviorMonitorData</mainClass>-->
                         </manifest>
                     </archive>
+                    
                 </configuration>
                 <executions>
                     <execution>

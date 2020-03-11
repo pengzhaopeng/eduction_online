@@ -139,6 +139,12 @@
                     <source>1.8</source>
                     <target>1.8</target>
                     <encoding>UTF-8</encoding>
+                    <excludes>
+                        <exclude>etl_data/core-site.xml</exclude>
+                        <exclude>etl_data/hdfs-site.xml</exclude>
+                        <exclude>etl_data/hive-site.xml</exclude>
+                        <exclude>etl_data/mapred-site.xml</exclude>
+                    </excludes>
                 </configuration>
                 <executions>
                     <execution>

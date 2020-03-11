@@ -23,26 +23,62 @@ object AppCourseStudyAnalysis {
     //获取SparkSession,并支持Hive操作
     val conf: SparkConf = new SparkConf()
       .setAppName(this.getClass.getSimpleName)
-      .setMaster("local[*]")
+//      .setMaster("local[*]")
     val spark: SparkSession = SparkSession.builder()
       .config(conf)
+      .config("spark.sql.orc.impl", "native")
+      .config("spark.sql.orc.enableVectorizedReader", true)
       .enableHiveSupport()
       .getOrCreate()
 
     //创建临时表，目的是防止分析完的数据直接导入 MySQL 失败那就白分析了
+//    spark.sql(
+//      s"""
+//         |select * from education_online.user_behavior limit 10
+//       """.stripMargin).show()
+    //建表
     spark.sql(
       s"""
-         |drop table if exists "education_online".education_online.tmp_app_course_study_analysis_${day};
+         |drop table if exists education_online.tmp_app_course_study_analysis_${day}
+       """.stripMargin)
+    spark.sql(
+      s"""
          |create table if not exists education_online.tmp_app_course_study_analysis_${day}(
          |    watch_video_count INT,
          |    complete_video_count INT,
          |    dt INT
-         |) row format delimited fields terminated by "\t" stored as ORC
-         |location '/warehouse/education_online/tmp/tmp_app_course_study_analysis_${day}';
-       """.stripMargin)
+         |)row format delimited fields terminated by '\t'
+         |location '/warehouse/education_online/tmp/tmp_app_course_study_analysis_${day}'
+           """.stripMargin)
 
     //将分析结果导入临时表
-
+    spark.sql(
+      s"""
+         |insert overwrite table education_online.tmp_app_course_study_analysis_${day}
+         |select
+         |	sum(watch_video_count),
+         |	sum(complete_video_count),
+         |	dt
+         |from(
+         |		select
+         |			count(distinct uid) as watch_video_count,
+         |			0 as complete_video_count,
+         |			dt
+         |		from education_online.user_behavior
+         |		where dt=${day} and event_key="startVideo"
+         |		group by dt
+         |		union all
+         |		select
+         |			0 as watch_video_count,
+         |			count(distinct uid) as complete_video_count,
+         |			dt
+         |		from education_online.user_behavior
+         |		where dt=${day} and event_key="endVideo"
+         |		and (end_video_time-start_video_time)>=video_length
+         |		group by dt
+         |	)t1
+         |group by dt
+       """.stripMargin)
 
     //停止
     spark.stop()
