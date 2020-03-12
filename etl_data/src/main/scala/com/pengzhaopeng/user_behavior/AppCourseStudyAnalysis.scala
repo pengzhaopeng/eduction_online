@@ -24,7 +24,7 @@ object AppCourseStudyAnalysis {
     //获取SparkSession,并支持Hive操作
     val conf: SparkConf = new SparkConf()
       .setAppName(this.getClass.getSimpleName)
-//      .setMaster("local[*]")
+      .setMaster("local[*]")
     val spark: SparkSession = SparkSession.builder()
       .config(conf)
       .config("spark.sql.orc.impl", "native")
@@ -38,10 +38,44 @@ object AppCourseStudyAnalysis {
 //    appCourseStudyAnalysis(day, spark)11
 
     //2、各系统版本访问统计
-    appVersionAnalysis(day,spark)
+//    appVersionAnalysis(day,spark)
+
+    //3、渠道新用户统计
+    appChannelAnalysis(day,spark)
 
     //停止
     spark.stop()
+  }
+
+  /**
+    * 渠道新用户统计
+    * @param day
+    * @param spark
+    * @return
+    */
+  def appChannelAnalysis(day: String, spark: SparkSession) = {
+    spark.sql(
+      s"""
+         |create table if not exists education_online.tmp_app_channel_analysis_${day}(
+         |	channel string,
+         |	new_user_count int,
+         |	dt int
+         |)row format delimited fields terminated by '\t'
+         |location '/warehouse/education_online/tmp/tmp_app_channel_analysis_${day}'
+       """.stripMargin)
+
+    spark.sql(
+      s"""
+         |insert overwrite table education_online.tmp_app_channel_analysis_${day}
+         |select
+         |	channel,
+         |	count(distinct uid),
+         |	dt
+         |from education_online.user_behavior
+         |where dt=${day}
+         |and event_key="registerAccount"
+         |group by channel,dt
+       """.stripMargin)
   }
 
   /**
