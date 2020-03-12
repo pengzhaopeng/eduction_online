@@ -12,6 +12,7 @@ import org.apache.spark.sql.SparkSession
   */
 object AppCourseStudyAnalysis {
 
+
   def main(args: Array[String]): Unit = {
 
     //验证参数-日期
@@ -33,6 +34,9 @@ object AppCourseStudyAnalysis {
       .getOrCreate()
 
     //创建临时表，目的是防止分析完的数据直接导入 MySQL 失败那就白分析了
+
+    //测试
+//    appTest(spark)
 
     //1、课程学习反馈指标
 //    appCourseStudyAnalysis(day, spark)11
@@ -161,6 +165,31 @@ object AppCourseStudyAnalysis {
          |	)t1
          |group by dt
        """.stripMargin)
+  }
 
+  /**
+    * 测试
+    */
+  def appTest(spark: SparkSession) = {
+//    spark.sql(
+//      s"""
+//         |create external table gmall.dws_user_action1
+//         |(
+//         |    user_id          string      comment '用户 id',
+//         |    order_count     bigint      comment '下单次数 ',
+//         |    order_amount    decimal(16,2)  comment '下单金额 ',
+//         |    payment_count   bigint      comment '支付次数',
+//         |    payment_amount  decimal(16,2) comment '支付金额 '
+//         |) COMMENT '每日用户行为宽表'
+//         |PARTITIONED BY (`dt` string)
+//         |stored as parquet
+//         |location '/warehouse/gmall/dws/dws_user_action1/'
+//         |tblproperties ("parquet.compression"="snappy")
+//       """.stripMargin)
+      spark.sql(
+        s"""
+           |insert overwrite table gmall.dws_user_action1 partition(dt=20191205)
+           |select * from gmall.dws_user_action where dt=20191205
+         """.stripMargin)
   }
 }
