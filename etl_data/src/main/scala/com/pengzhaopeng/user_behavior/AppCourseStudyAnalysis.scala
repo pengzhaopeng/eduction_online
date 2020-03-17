@@ -78,6 +78,10 @@ object AppCourseStudyAnalysis {
     //创建临时结果表
     spark.sql(
       s"""
+         |drop table if exists education_online.tmp_seven_days_retained_analysis_${endDay}
+       """.stripMargin)
+    spark.sql(
+      s"""
          |create table education_online.tmp_seven_days_retained_analysis_${endDay}(
          |    register_day INT,
          |    zero_interval_retained_rate DOUBLE,
@@ -92,6 +96,10 @@ object AppCourseStudyAnalysis {
        """.stripMargin)
 
     //生成用户留存表
+    spark.sql(
+      s"""
+         |drop table if exists education_online.tmp_user_retained_${startDay}_${endDay}
+       """.stripMargin)
     spark.sql(
       s"""
          |create table if not exists education_online.tmp_user_retained_${startDay}_${endDay}
@@ -130,10 +138,14 @@ object AppCourseStudyAnalysis {
          |on t1.uid = t2.uid
          |)t3
          |where day_interval>=0
-         |group by register_day,day_interval;
+         |group by register_day,day_interval
        """.stripMargin)
 
     //生成用户留存率表
+    spark.sql(
+      s"""
+         |drop table if exists education_online.tmp_user_retained_rate_${startDay}_${endDay}
+       """.stripMargin)
     spark.sql(
       s"""
          |create table if not exists education_online.tmp_user_retained_rate_${startDay}_${endDay}
@@ -171,7 +183,7 @@ object AppCourseStudyAnalysis {
          |		)t2
          |		on t1.register_day = t2.dt
          |		group by t1.register_day,t1.day_interval,t1.retained,t2.register_count
-         |) t3;
+         |) t3
        """.stripMargin)
 
     //列转行
@@ -189,7 +201,7 @@ object AppCourseStudyAnalysis {
          |	max(case when day_interval = 6 then retained_rate else 0 end) as six_interval_retained_rate,
          |	current_dt
          |from education_online.tmp_user_retained_rate_${startDay}_${endDay}
-         |group by register_day,current_dt;
+         |group by register_day,current_dt
        """.stripMargin)
   }
 
