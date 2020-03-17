@@ -16,9 +16,17 @@ object AppCourseStudyAnalysis {
 
     //验证参数-日期
     val day = args(0)
+    var startDay = args(1)
+    var endDay = args(2)
     if (StringUtil.isEmpty(day) || day.length != 8) {
       println("Usage: Please input date, eg:${day}")
       System.exit(1)
+    }
+    if (StringUtil.isEmpty(startDay) || day.length != 8) {
+      startDay = String.valueOf(20190413)
+    }
+    if (StringUtil.isEmpty(endDay) || day.length != 8) {
+      endDay = String.valueOf(20190419)
     }
 
     //获取SparkSession,并支持Hive操作
@@ -53,10 +61,136 @@ object AppCourseStudyAnalysis {
     //5、漏斗分析
 //    appStudyFunnelAnalysis(day,spark)
 
-    //6、
+    //6、7日留存分析
+    appSevenDaysRetainedAnalysis(startDay,endDay,spark)
 
     //停止
     spark.stop()
+  }
+
+  /**
+    *
+    * @param startDay 开始日期
+    * @param endDay 结束日期 （统计日期）
+    * @param spark
+    */
+  def appSevenDaysRetainedAnalysis( startDay: String, endDay: String, spark: SparkSession) = {
+    //创建临时结果表
+    spark.sql(
+      s"""
+         |create table education_online.tmp_seven_days_retained_analysis_${endDay}(
+         |    register_day INT,
+         |    zero_interval_retained_rate DOUBLE,
+         |    one_interval_retained_rate DOUBLE,
+         |    two_interval_retained_rate DOUBLE,
+         |    three_interval_retained_rate DOUBLE,
+         |    four_interval_retained_rate DOUBLE,
+         |    five_interval_retained_rate DOUBLE,
+         |    six_interval_retained_rate DOUBLE,
+         |    dt INT
+         |) row format delimited fields terminated by "\t"
+       """.stripMargin)
+
+    //生成用户留存表
+    spark.sql(
+      s"""
+         |create table if not exists education_online.tmp_user_retained_${startDay}_${endDay}
+         |as
+         |select
+         |	register_day,
+         |	day_interval,
+         |	count(1) as retained
+         |from
+         |(
+         |	select
+         |		t1.uid,
+         |		t1.register_day,
+         |		t2.active_day,
+         |		datediff(from_unixtime(cast(t2.event_time as int),"yyyy-MM-dd"),from_unixtime(cast(t1.event_time as int),"yyyy-MM-dd")) as day_interval
+         |	from
+         |	(
+         |		select
+         |			uid,
+         |			dt as register_day,
+         |			event_time
+         |		from education_online.user_behavior
+         |		where dt between ${startDay} and ${endDay}
+         |		and event_key = "registerAccount"
+         |	)t1
+         |	left join
+         |	(
+         |		select
+         |			uid,
+         |			dt as active_day,
+         |			max(event_time) as event_time
+         |		from education_online.user_behavior
+         |		where dt between ${startDay} and ${endDay}
+         |		group by uid,dt
+         |	)t2
+         |on t1.uid = t2.uid
+         |)t3
+         |where day_interval>=0
+         |group by register_day,day_interval;
+       """.stripMargin)
+
+    //生成用户留存率表
+    spark.sql(
+      s"""
+         |create table if not exists education_online.tmp_user_retained_rate_${startDay}_${endDay}
+         |as
+         |select
+         |	register_day,
+         |	day_interval,
+         |	retained,
+         |	round(retained/register_count,4) as retained_rate,
+         |	current_dt
+         |from(
+         |	select
+         |		t1.register_day,
+         |		t1.day_interval,
+         |		t1.retained,
+         |		t2.register_count,
+         |		${endDay} as current_dt
+         |	from
+         |		(
+         |			select
+         |				register_day,
+         |				day_interval,
+         |				retained
+         |			from education_online.tmp_user_retained_${startDay}_${endDay}
+         |		)t1
+         |		left join
+         |		(
+         |			select
+         |				dt,
+         |				count(1) as register_count
+         |			from education_online.user_behavior
+         |			where dt between ${startDay} and ${endDay}
+         |			and event_key="registerAccount"
+         |			group by dt
+         |		)t2
+         |		on t1.register_day = t2.dt
+         |		group by t1.register_day,t1.day_interval,t1.retained,t2.register_count
+         |) t3;
+       """.stripMargin)
+
+    //列转行
+    spark.sql(
+      s"""
+         |insert overwrite table education_online.tmp_seven_days_retained_analysis_${endDay}
+         |select
+         |	register_day,
+         |	max(case when day_interval = 0 then retained_rate else 0 end) as zero_interval_retained_rate,
+         |	max(case when day_interval = 1 then retained_rate else 0 end) as one_interval_retained_rate,
+         |	max(case when day_interval = 2 then retained_rate else 0 end) as two_interval_retained_rate,
+         |	max(case when day_interval = 3 then retained_rate else 0 end) as three_interval_retained_rate,
+         |	max(case when day_interval = 4 then retained_rate else 0 end) as four_interval_retained_rate,
+         |	max(case when day_interval = 5 then retained_rate else 0 end) as five_interval_retained_rate,
+         |	max(case when day_interval = 6 then retained_rate else 0 end) as six_interval_retained_rate,
+         |	current_dt
+         |from education_online.tmp_user_retained_rate_${startDay}_${endDay}
+         |group by register_day,current_dt;
+       """.stripMargin)
   }
 
   /**
