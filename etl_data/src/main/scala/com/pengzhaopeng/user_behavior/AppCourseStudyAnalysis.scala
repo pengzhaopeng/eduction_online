@@ -203,6 +203,7 @@ object AppCourseStudyAnalysis {
          |from education_online.tmp_user_retained_rate_${startDay}_${endDay}
          |group by register_day,current_dt
        """.stripMargin)
+
   }
 
   /**
@@ -218,7 +219,7 @@ object AppCourseStudyAnalysis {
 //       """.stripMargin)
     spark.sql(
       s"""
-         |create table if not exists education_online.app_study_funnel_analysis_${day}(
+         |create table if not exists education_online.tmp_app_study_funnel_analysis_${day}(
          |	start_app_count int,
          |	start_video_count int,
          |	complete_video_count int,
@@ -230,7 +231,7 @@ object AppCourseStudyAnalysis {
        """.stripMargin)
     spark.sql(
       s"""
-         |insert overwrite table education_online.app_study_funnel_analysis_${day}
+         |insert overwrite table education_online.tmp_app_study_funnel_analysis_${day}
          |select
          |	count(DISTINCT t1.uid) as start_app_count,
          |	count(distinct t2.uid) as start_video_count,
