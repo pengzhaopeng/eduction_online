@@ -1,7 +1,7 @@
 package com.pengzhaopeng.user_behavior
 
 import com.pengzhaopeng.utils.StringUtil
-import org.apache.spark.SparkConf
+import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.sql.SparkSession
 
 /**
@@ -33,6 +33,7 @@ object AppCourseStudyAnalysis {
     val conf: SparkConf = new SparkConf()
       .setAppName(this.getClass.getSimpleName)
       .setMaster("local[*]")
+
     val spark: SparkSession = SparkSession.builder()
       .config(conf)
       .config("spark.sql.orc.impl", "native")
@@ -41,16 +42,20 @@ object AppCourseStudyAnalysis {
       .enableHiveSupport()
       .getOrCreate()
 
+    val ssc: SparkContext = spark.sparkContext
+//    ssc.hadoopConfiguration.set("fs.defaultFS","hdfs://nameservice1")
+//    ssc.hadoopConfiguration.set("dfs.nameservices","nameservice1")
+
     //创建临时表，目的是防止分析完的数据直接导入 MySQL 失败那就白分析了
 
     //测试
     //    appTest(spark)
 
     //1、课程学习反馈指标
-    //    appCourseStudyAnalysis(day, spark)11
+//        appCourseStudyAnalysis(day, spark)
 
     //2、各系统版本访问统计
-    //    appVersionAnalysis(day,spark)
+//        appVersionAnalysis(day,spark)
 
     //3、渠道新用户统计
 //    appChannelAnalysis(day, spark)
@@ -64,8 +69,14 @@ object AppCourseStudyAnalysis {
     //6、7日留存分析
     appSevenDaysRetainedAnalysis(startDay,endDay,spark)
 
-    //停止
-    spark.stop()
+    while (true) {
+//      println(".....1")
+    }
+
+//    //停止
+//    spark.stop()
+
+
   }
 
   /**
@@ -476,6 +487,7 @@ object AppCourseStudyAnalysis {
          |	)t1
          |group by dt
        """.stripMargin)
+
   }
 
   /**
