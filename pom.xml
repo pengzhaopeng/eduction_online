@@ -12,6 +12,7 @@
         <module>analysis</module>
         <module>mock_data</module>
         <module>etl_data</module>
+        <module>new_ed_online</module>
     </modules>
     <packaging>pom</packaging>
 
@@ -139,12 +140,6 @@
                     <source>1.8</source>
                     <target>1.8</target>
                     <encoding>UTF-8</encoding>
-                    <excludes>
-                        <exclude>etl_data/core-site.xml</exclude>
-                        <exclude>etl_data/hdfs-site.xml</exclude>
-                        <exclude>etl_data/hive-site.xml</exclude>
-                        <exclude>etl_data/mapred-site.xml</exclude>
-                    </excludes>
                 </configuration>
                 <executions>
                     <execution>
@@ -185,20 +180,20 @@
         <pluginManagement>
             <plugins>
                 <!-- 用于项目的打包插件 -->
-                <!--<plugin>-->
-                <!--<groupId>org.apache.maven.plugins</groupId>-->
-                <!--<artifactId>maven-assembly-plugin</artifactId>-->
-                <!--<version>3.0.0</version>-->
-                <!--<executions>-->
-                <!--<execution>-->
-                <!--<id>make-assembly</id>-->
-                <!--<phase>package</phase>-->
-                <!--<goals>-->
-                <!--<goal>single</goal>-->
-                <!--</goals>-->
-                <!--</execution>-->
-                <!--</executions>-->
-                <!--</plugin>-->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-assembly-plugin</artifactId>
+                    <version>3.0.0</version>
+                    <executions>
+                        <execution>
+                            <id>make-assembly</id>
+                            <phase>package</phase>
+                            <goals>
+                                <goal>single</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
             </plugins>
         </pluginManagement>
 
