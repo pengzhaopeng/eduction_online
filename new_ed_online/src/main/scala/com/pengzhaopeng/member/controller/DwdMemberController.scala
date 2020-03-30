@@ -17,7 +17,7 @@ object DwdMemberController {
     System.setProperty("HADOOP_USER_NAME", "dog")
 
     //设置hive参数
-    val sparkConf = new SparkConf()
+    val sparkConf: SparkConf = new SparkConf()
       .setAppName("dwd_member_import")
       .setMaster("local[*]")
     val sparkSession: SparkSession = SparkSession.builder().config(sparkConf).enableHiveSupport().getOrCreate()
