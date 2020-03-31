@@ -56,7 +56,7 @@ object DwsMemberService {
          |left join dwd.dwd_base_website d on b.websiteid=d.siteid and b.dn=d.dn
          |left join dwd.dwd_pcentermempaymoney e on a.uid=e.uid and a.dn=e.dn
          |left join dwd.dwd_vip_level f on e.vip_id=f.vip_id and e.dn=f.dn
-         |where a.dt=20190722
+         |where a.dt=${dt}
            """.stripMargin).show()
     while (true) {
       Thread.sleep(5000)
@@ -65,7 +65,7 @@ object DwsMemberService {
   }
 
   /**
-    * 使用sql方式 + 广播小表
+    * 使用sql方式 + 广播小表 （spark2.1中式不生效的，没有对纯sql进行优化）
     *
     * @param sparkSession
     * @param dt
