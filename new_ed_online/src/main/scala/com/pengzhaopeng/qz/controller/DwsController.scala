@@ -13,8 +13,11 @@ import org.apache.spark.sql.SparkSession
   */
 object DwsController {
   def main(args: Array[String]): Unit = {
-    System.setProperty("HADOOP_USER_NAME", "atguigu")
-    val sparkConf = new SparkConf().setAppName("dws_qz_controller")
+    System.setProperty("HADOOP_USER_NAME", "dog")
+    val sparkConf = new SparkConf().setAppName("dws_qz_controller").setMaster("local[*]")
+    //设置广播的表
+    sparkConf.set("spark.sql.autoBroadcastJoinThreshold", "104857600") //100m
+
     val sparkSession = SparkSession.builder().config(sparkConf).enableHiveSupport().getOrCreate()
     val ssc = sparkSession.sparkContext
     ssc.hadoopConfiguration.set("fs.defaultFS", "hdfs://nameservice1")
@@ -23,11 +26,16 @@ object DwsController {
     HiveUtil.openCompression(sparkSession) //开启压缩
     HiveUtil.useSnappyCompression(sparkSession) //使用snappy压缩
     val dt = "20190722"
-    DwsQzService.saveDwsQzChapter(sparkSession, dt)
-//    DwsQzService.saveDwsQzCourse(sparkSession, dt)
+//    DwsQzService.saveDwsQzChapter(sparkSession, dt)
+    DwsQzService.saveDwsQzCourse(sparkSession, dt)
 //    DwsQzService.saveDwsQzMajor(sparkSession, dt)
 //    DwsQzService.saveDwsQzPaper(sparkSession, dt)
 //    DwsQzService.saveDwsQzQuestionTpe(sparkSession, dt)
 //    DwsQzService.saveDwsUserPaperDetail(sparkSession, dt)
+
+    while (true){
+      Thread.sleep(5000)
+      println("---")
+    }
   }
 }

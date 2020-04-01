@@ -22,7 +22,7 @@ object EtlDataService {
     */
   def etlQzChapter(ssc: SparkContext, sparkSession: SparkSession) = {
     import sparkSession.implicits._ //隐式转换
-    ssc.textFile("/user/atguigu/ods/QzChapter.log").filter(item => {
+    ssc.textFile("/user/dog/ods/QzChapter.log").filter(item => {
       val obj = ParseJsonData.getJsonData(item)
       obj.isInstanceOf[JSONObject]
     }).mapPartitions(partitions => {
@@ -33,7 +33,7 @@ object EtlDataService {
         val chaptername = jsonObject.getString("chaptername")
         val sequence = jsonObject.getString("sequence")
         val showstatus = jsonObject.getString("showstatus")
-        val status = jsonObject.getString("status")
+//        val status = jsonObject.getString("status")
         val creator = jsonObject.getString("creator")
         val createtime = jsonObject.getString("createtime")
         val courseid = jsonObject.getIntValue("courseid")
@@ -41,7 +41,7 @@ object EtlDataService {
         val outchapterid = jsonObject.getIntValue("outchapterid")
         val dt = jsonObject.getString("dt")
         val dn = jsonObject.getString("dn")
-        (chapterid, chapterlistid, chaptername, sequence, showstatus, status, creator, createtime,
+        (chapterid, chapterlistid, chaptername, sequence, showstatus, creator, createtime,
           courseid, chapternum, outchapterid, dt, dn)
       })
     }).toDF().coalesce(1).write.mode(SaveMode.Append).insertInto("dwd.dwd_qz_chapter")
@@ -55,7 +55,7 @@ object EtlDataService {
     */
   def etlQzChapterList(ssc: SparkContext, sparkSession: SparkSession) = {
     import sparkSession.implicits._
-    ssc.textFile("/user/atguigu/ods/QzChapterList.log").filter(item => {
+    ssc.textFile("/user/dog/ods/QzChapterList.log").filter(item => {
       val obj = ParseJsonData.getJsonData(item)
       obj.isInstanceOf[JSONObject]
     }).mapPartitions(partitions => {
@@ -84,7 +84,7 @@ object EtlDataService {
     */
   def etlQzPoint(ssc: SparkContext, sparkSession: SparkSession) = {
     import sparkSession.implicits._
-    ssc.textFile("/user/atguigu/ods/QzPoint.log").filter(item => {
+    ssc.textFile("/user/dog/ods/QzPoint.log").filter(item => {
       val obj = ParseJsonData.getJsonData(item)
       obj.isInstanceOf[JSONObject]
     }).mapPartitions(partitions => {
@@ -130,7 +130,7 @@ object EtlDataService {
     */
   def etlQzPointQuestion(ssc: SparkContext, sparkSession: SparkSession) = {
     import sparkSession.implicits._
-    ssc.textFile("/user/atguigu/ods/QzPointQuestion.log").filter(item => {
+    ssc.textFile("/user/dog/ods/QzPointQuestion.log").filter(item => {
       val obj = ParseJsonData.getJsonData(item)
       obj.isInstanceOf[JSONObject]
     }).mapPartitions(partitions => {
@@ -156,7 +156,7 @@ object EtlDataService {
     */
   def etlQzSiteCourse(ssc: SparkContext, sparkSession: SparkSession) = {
     import sparkSession.implicits._
-    ssc.textFile("/user/atguigu/ods/QzSiteCourse.log").filter(item => {
+    ssc.textFile("/user/dog/ods/QzSiteCourse.log").filter(item => {
       val obj = ParseJsonData.getJsonData(item)
       obj.isInstanceOf[JSONObject]
     }).mapPartitions(partitions => {
@@ -191,7 +191,7 @@ object EtlDataService {
     */
   def etlQzCourse(ssc: SparkContext, sparkSession: SparkSession) = {
     import sparkSession.implicits._
-    ssc.textFile("/user/atguigu/ods/QzCourse.log").filter(item => {
+    ssc.textFile("/user/dog/ods/QzCourse.log").filter(item => {
       val obj = ParseJsonData.getJsonData(item)
       obj.isInstanceOf[JSONObject]
     }).mapPartitions(partitions => {
@@ -224,7 +224,7 @@ object EtlDataService {
     */
   def etlQzCourseEdusubject(ssc: SparkContext, sparkSession: SparkSession) = {
     import sparkSession.implicits._
-    ssc.textFile("/user/atguigu/ods/QzCourseEduSubject.log").filter(item => {
+    ssc.textFile("/user/dog/ods/QzCourseEduSubject.log").filter(item => {
       val obj = ParseJsonData.getJsonData(item)
       obj.isInstanceOf[JSONObject]
     }).mapPartitions(partitions => {
@@ -251,7 +251,7 @@ object EtlDataService {
     */
   def etlQzWebsite(ssc: SparkContext, sparkSession: SparkSession) = {
     import sparkSession.implicits._
-    ssc.textFile("/user/atguigu/ods/QzWebsite.log").filter(item => {
+    ssc.textFile("/user/dog/ods/QzWebsite.log").filter(item => {
       val obj = ParseJsonData.getJsonData(item)
       obj.isInstanceOf[JSONObject]
     }).mapPartitions(partitions => {
@@ -284,7 +284,7 @@ object EtlDataService {
     */
   def etlQzMajor(ssc: SparkContext, sparkSession: SparkSession) = {
     import sparkSession.implicits._
-    ssc.textFile("/user/atguigu/ods/QzMajor.log").filter(item => {
+    ssc.textFile("/user/dog/ods/QzMajor.log").filter(item => {
       val obj = ParseJsonData.getJsonData(item)
       obj.isInstanceOf[JSONObject]
     }).mapPartitions(partitions => {
@@ -315,7 +315,7 @@ object EtlDataService {
     */
   def etlQzBusiness(ssc: SparkContext, sparkSession: SparkSession) = {
     import sparkSession.implicits._
-    ssc.textFile("/user/atguigu/ods/QzBusiness.log").filter(item => {
+    ssc.textFile("/user/dog/ods/QzBusiness.log").filter(item => {
       val obj = ParseJsonData.getJsonData(item)
       obj.isInstanceOf[JSONObject]
     }).mapPartitions(partitions => {
@@ -337,7 +337,7 @@ object EtlDataService {
 
   def etlQzPaperView(ssc: SparkContext, sparkSession: SparkSession) = {
     import sparkSession.implicits._
-    ssc.textFile("/user/atguigu/ods/QzPaperView.log").filter(item => {
+    ssc.textFile("/user/dog/ods/QzPaperView.log").filter(item => {
       val obj = ParseJsonData.getJsonData(item)
       obj.isInstanceOf[JSONObject]
     }).mapPartitions(partitions => {
@@ -378,7 +378,7 @@ object EtlDataService {
 
   def etlQzCenterPaper(ssc: SparkContext, sparkSession: SparkSession) = {
     import sparkSession.implicits._
-    ssc.textFile("/user/atguigu/ods/QzCenterPaper.log").filter(item => {
+    ssc.textFile("/user/dog/ods/QzCenterPaper.log").filter(item => {
       val obj = ParseJsonData.getJsonData(item)
       obj.isInstanceOf[JSONObject]
     }).mapPartitions(partitions => {
@@ -399,7 +399,7 @@ object EtlDataService {
 
   def etlQzPaper(ssc: SparkContext, sparkSession: SparkSession) = {
     import sparkSession.implicits._
-    ssc.textFile("/user/atguigu/ods/QzPaper.log").filter(item => {
+    ssc.textFile("/user/dog/ods/QzPaper.log").filter(item => {
       val obj = ParseJsonData.getJsonData(item)
       obj.isInstanceOf[JSONObject]
     }).mapPartitions(partitions => {
@@ -428,7 +428,7 @@ object EtlDataService {
 
   def etlQzCenter(ssc: SparkContext, sparkSession: SparkSession) = {
     import sparkSession.implicits._
-    ssc.textFile("/user/atguigu/ods/QzCenter.log").filter(item => {
+    ssc.textFile("/user/dog/ods/QzCenter.log").filter(item => {
       val obj = ParseJsonData.getJsonData(item)
       obj.isInstanceOf[JSONObject]
     }).mapPartitions(parititons => {
@@ -457,7 +457,7 @@ object EtlDataService {
 
   def etlQzQuestion(ssc: SparkContext, sparkSession: SparkSession) = {
     import sparkSession.implicits._
-    ssc.textFile("/user/atguigu/ods/QzQuestion.log").filter(item => {
+    ssc.textFile("/user/dog/ods/QzQuestion.log").filter(item => {
       val obj = ParseJsonData.getJsonData(item)
       obj.isInstanceOf[JSONObject]
     }).mapPartitions(partitions => {
@@ -496,7 +496,7 @@ object EtlDataService {
 
   def etlQzQuestionType(ssc: SparkContext, sparkSession: SparkSession) = {
     import sparkSession.implicits._
-    ssc.textFile("/user/atguigu/ods/QzQuestionType.log").filter(item => {
+    ssc.textFile("/user/dog/ods/QzQuestionType.log").filter(item => {
       val obj = ParseJsonData.getJsonData(item)
       obj.isInstanceOf[JSONObject]
     }).mapPartitions(partitions => {
@@ -530,7 +530,7 @@ object EtlDataService {
     */
   def etlQzMemberPaperQuestion(ssc: SparkContext, sparkSession: SparkSession) = {
     import sparkSession.implicits._
-    ssc.textFile("/user/atguigu/ods/QzMemberPaperQuestion.log").filter(item => {
+    ssc.textFile("/user/dog/ods/QzMemberPaperQuestion.log").filter(item => {
       val obj = ParseJsonData.getJsonData(item)
       obj.isInstanceOf[JSONObject]
     }).mapPartitions(partitions => {

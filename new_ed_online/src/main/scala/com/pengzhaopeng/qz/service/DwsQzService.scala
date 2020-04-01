@@ -27,31 +27,34 @@ object DwsQzService {
     val dwdQzPointQuestion: DataFrame = QzChapterDao.getDwdQzPointQuestion(sparkSession,dt)
     //注册临时表
     dwdQzChapter.createOrReplaceTempView("dwd_qz_chapter")
-    dwdQzChapterList.createOrReplaceTempView("qz_chapter_list")
+    dwdQzChapterList.createOrReplaceTempView("dwd_qz_chapter_list")
     dwdQzPoint.createOrReplaceTempView("dwd_qz_point")
     dwdQzPointQuestion.createOrReplaceTempView("dwd_qz_point_question")
 
     val dwsQzChapterDf = sparkSession.sql(
       s"""
          |select
-         |	chapterid,
-         |	chapterlistid,
+         |	t1.chapterid,
+         |	t1.chapterlistid,
          |	chaptername,
-         |	sequence,  showstatus,  showstatus,
+         |	sequence,
+         | showstatus,  showstatus,
          |	chapter_creator,  chapter_createtime,  chapter_courseid,  chapternum,
          |	chapterallnum,  outchapterid,  chapterlistname,
-         |	pointid,  questionid,  questype,  pointname,  pointyear,  chapter,
+         |	t3.pointid,  questionid,  questype,  pointname,  pointyear,  chapter,
          |	excisenum,  pointlistid,  pointdescribe,
          |	pointlevel,  typelist,  point_score,  thought,  remid,  pointnamelist,
-         |	typelistids,  pointlist,  dt,  dn
+         |	typelistids,  pointlist,
+         | dt,
+         | t1.dn
          |from
          |dwd_qz_chapter t1
-         |join qz_chapter_list t2 on t1.chapterlistid = t2.chapterlistid and t1.dn = t2.dn
+         |join dwd_qz_chapter_list t2 on t1.chapterlistid = t2.chapterlistid and t1.dn = t2.dn
          |join dwd_qz_point t3 on t1.chapterid = t3.chapterid and t1.dn = t3.dn
          |join dwd_qz_point_question t4 on t3.pointid = t4.pointid and t3.dn = t4.dn
        """.stripMargin)
     dwsQzChapterDf.show()
-    dwsQzChapterDf.write.mode(SaveMode.Append).insertInto("dws.dws_qz_chapter")
+//    dwsQzChapterDf.coalesce(1).write.mode(SaveMode.Append).insertInto("dws.dws_qz_chapter")
   }
 
   /**
@@ -63,11 +66,48 @@ object DwsQzService {
     * @param sparkSession
     * @param dt
     */
-//  def saveDwsQzCourse(sparkSession:SparkSession,dt:String) = {
-//    val dwdQzSiteCourse = QzCourseDao.getDwdQzSiteCourse(sparkSession, dt)
-//    val dwdQzCourse = QzCourseDao.getDwdQzCourse(sparkSession, dt)
-//    val dwdQzCourseEdusubject = QzCourseDao.getDwdQzCourseEduSubject(sparkSession, dt)
-//
-//    dwdQzSiteCourse.createOrReplaceTempView()
-//  }
+  def saveDwsQzCourse(sparkSession:SparkSession,dt:String) = {
+    val dwdQzSiteCourse = QzCourseDao.getDwdQzSiteCourse(sparkSession, dt)
+    dwdQzSiteCourse.cache().count()
+    val dwdQzCourse = QzCourseDao.getDwdQzCourse(sparkSession, dt)
+    dwdQzCourse.cache().count()
+    val dwdQzCourseEdusubject = QzCourseDao.getDwdQzCourseEduSubject(sparkSession, dt)
+    dwdQzCourseEdusubject.cache().count()
+
+    dwdQzSiteCourse.createOrReplaceTempView("dwd_qz_site_course")
+    dwdQzCourse.createOrReplaceTempView("qz_course")
+    dwdQzCourseEdusubject.createOrReplaceTempView("dwd_qz_course_edusubject")
+
+    val dwsQzCourseDf = sparkSession.sql(
+      s"""
+         |select
+         |	t1.sitecourseid,
+         |	t1.siteid,
+         |	t1.courseid,
+         |	t1.sitecoursename,
+         |	t1.coursechapter,
+         |	t1.sequence,
+         |	t1.status,
+         |	t1.sitecourse_creator,
+         |	t1.sitecourse_createtime,
+         |	t1.helppaperstatus,
+         |	t1.servertype,
+         |	t1.boardid,
+         |	t1.showstatus,
+         |	t2.majorid,
+         |	t2.coursename,
+         |	t2.isadvc,
+         |	t2.chapterlistid,
+         |	t2.pointlistid,
+         |	t3.courseeduid,
+         |	t3.edusubjectid,
+         |	t1.dt,
+         |	t1.dn
+         |from dwd_qz_site_course t1
+         |join qz_course t2 on t1.courseid=t2.courseid and t1.dn=t2.dn
+         |join dwd_qz_course_edusubject t3 on t1.courseid=t3.courseid and t1.dn=t3.dn
+       """.stripMargin)
+//    dwsQzCourseDf.show()
+    dwsQzCourseDf.coalesce(1).write.mode(SaveMode.Append).insertInto("dws.dws_qz_course")
+  }
 }
