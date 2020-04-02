@@ -16,6 +16,7 @@ object DwsController {
     System.setProperty("HADOOP_USER_NAME", "dog")
     val sparkConf = new SparkConf().setAppName("dws_member_import")
       .setMaster("local[*]")
+//      .getOption("")
     val sparkSession = SparkSession.builder().config(sparkConf).enableHiveSupport().getOrCreate()
     val ssc = sparkSession.sparkContext
     HiveUtil.openDynamicPartition(sparkSession) //开启动态分区

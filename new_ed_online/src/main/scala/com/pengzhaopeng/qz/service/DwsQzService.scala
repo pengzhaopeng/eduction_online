@@ -159,6 +159,7 @@ object DwsQzService {
   }
 
   /**
+    * 试卷维度退化宽表
     * qz_paper_view				试卷视图数据
     * qz_center_paper     试卷主题关联数据
     * qz_center					  主题数据
@@ -228,6 +229,7 @@ object DwsQzService {
   }
 
   /**
+    * 题目维度退化款表
     * qz_question					  做题日志数据
     * qz_question_type				题目类型数据
     */
@@ -274,5 +276,160 @@ object DwsQzService {
 //    dwsQzQuestionDf.show()
     dwsQzQuestionDf.coalesce(1).write.mode(SaveMode.Append).insertInto("dws.dws_qz_question")
 
+  }
+
+  /**
+    * 用户做题详情退化大宽表
+    * 学员做题详情数据表 + 章节维度 + 课程维度 + 主修维度 + 试卷维度 + 题目维度
+    * dws_user_paper_detail
+    * dws_qz_chapter
+    * dws_qz_course
+    * dws_qz_major
+    * dws_qz_paper
+    * dws_qz_question
+    */
+  def saveDwsUserPaperDetail(sparkSession: SparkSession, dt: String) = {
+    val dwdQzMemberPaperQuestion = UserPaperDetailDao.getDwdQzMemberPaperQuestion(sparkSession, dt)
+    val dwsQzChapter = UserPaperDetailDao.getDwsQzChapter(sparkSession, dt)
+    val dwsQzCourse = UserPaperDetailDao.getDwsQzCourse(sparkSession, dt)
+    val dwsQzMajor = UserPaperDetailDao.getDwsQzMajor(sparkSession, dt)
+    val dwsQzPaper = UserPaperDetailDao.getDwsQzPaper(sparkSession, dt)
+    val dwsQzQuestion = UserPaperDetailDao.getDwsQzQuestion(sparkSession, dt)
+    dwdQzMemberPaperQuestion.createOrReplaceTempView("dws_user_paper_detail")
+    dwsQzChapter.createOrReplaceTempView("dws_qz_chapter")
+    dwsQzCourse.createOrReplaceTempView("dws_qz_course")
+    dwsQzMajor.createOrReplaceTempView("dws_qz_major")
+    dwsQzPaper.createOrReplaceTempView("dwsQzPaper")
+    dwsQzQuestion.createOrReplaceTempView("dws_qz_question")
+
+    val dwsUserPaperDetailDf =  sparkSession.sql(
+      s"""
+         |select
+         |	 userid,
+         |	 t2.courseid,
+         |	 questionid,
+         |	 useranswer,
+         |	 istrue,
+         |	 lasttime,
+         |	 opertype,
+         |	 t1.paperid,
+         |	 spendtime,
+         |	 chapterid,
+         |	 chaptername,
+         |	 chapternum,
+         |   chapterallnum,
+         |	 outchapterid,
+         |	 chapterlistname,
+         |	 pointid,
+         |	 questype,
+         |	 pointyear,
+         |	 chapter,
+         |	 pointname,
+         |	 excisenum,
+         |	 pointdescribe,
+         |	 pointlevel,
+         |	 typelist,
+         |	 point_score,
+         |	 thought,
+         |	 remid,
+         |	 pointnamelist,
+         |   typelistids,
+         |	 pointlist,
+         |	 sitecourseid,
+         |	 siteid,
+         |	 sitecoursename,
+         |	 coursechapter,
+         |	 course_sequence,
+         |	 course_status,
+         |	 course_creator,
+         |	 course_createtime,
+         |	 servertype,
+         |	 helppaperstatus,
+         |	 boardid,
+         |	 showstatus,
+         |	 t5.majorid,
+         |	 coursename,
+         |   isadvc,
+         |	 t3.chapterlistid,
+         |	 t3.pointlistid,
+         |	 courseeduid,
+         |	 edusubjectid,  businessid,
+         |	 majorname,
+         |	 shortname,
+         |   major_status,
+         |	 major_sequence,
+         |	 major_creator,  major_createtime,  businessname,
+         |	 sitename,
+         |   domain,
+         |	 multicastserver,
+         |	 templateserver,
+         |	 multicastgateway,
+         |	 multicastport,
+         |	 paperviewid,
+         |	 paperviewname,
+         |	 paperparam,
+         |   openstatus,
+         |	 explainurl,
+         |	 iscontest,
+         |	 contesttime,
+         |	 conteststarttime,
+         |	 contestendtime,
+         |	 contesttimelimit,
+         |   dayiid,
+         |	 paper_status,
+         |	 paper_view_creator,
+         |	 paper_view_createtime,
+         |	 paperviewcatid,
+         |	 modifystatus,
+         |	 description,
+         |	 paperuse,
+         |   testreport,
+         |	 centerid,
+         |	 paper_sequence,
+         |	 centername,
+         |	 centeryear,
+         |	 centertype,
+         |	 provideuser,
+         |	 centerviewtype,
+         |   paper_stage,
+         |	 papercatid,
+         |	 paperyear,
+         |	 suitnum,
+         |	 papername,
+         |	 totalscore,
+         |	 question_parentid,
+         |	 questypeid,
+         |   quesviewtype,
+         |	 question_content,
+         |	 t1.question_answer,
+         |	 question_analysis,
+         |	 question_limitminute,
+         |	 score,
+         |   splitscore,
+         |	 lecture,
+         |	 question_creator,
+         |	 question_createtime,
+         |	 question_modifystatus,
+         |	 question_attanswer,
+         |   question_questag,
+         |	 question_vanalysisaddr,
+         |	 question_difficulty,
+         |	 quesskill,
+         |	 vdeoaddr,
+         |	 question_description,
+         |   question_splitscoretype,
+         |	 user_question_answer,
+         |	 t1.dt,
+         |	 t1,dn
+         |from dws_user_paper_detail t1
+         |join dws_qz_chapter t2 on t1.chapterid=t2.chapterid and t1.dn=t2.dn
+         |join dws_qz_course t3 on t1.sitecourseid=t3.sitecourseid and t1.dn=t3.dn
+         |join dws_qz_major t4 on t1.majorid=t2.majorid and t1.dn=t4.dn
+         |join dws_qz_paper t5 on t1.paperviewid=t5.paperviewid and t1.dn=t5.dn
+         |join dws_qz_question t6 on t1.questionid=t6.questionid and t1.dn=t6.dn
+         |
+       """.stripMargin)
+
+    dwsUserPaperDetailDf.show()
   }
 }
