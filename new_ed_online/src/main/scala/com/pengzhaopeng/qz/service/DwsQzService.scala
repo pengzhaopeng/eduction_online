@@ -108,8 +108,8 @@ object DwsQzService {
          |join qz_course t2 on t1.courseid=t2.courseid and t1.dn=t2.dn
          |join dwd_qz_course_edusubject t3 on t1.courseid=t3.courseid and t1.dn=t3.dn
        """.stripMargin)
-    dwsQzCourseDf.show()
-    //    dwsQzCourseDf.coalesce(1).write.mode(SaveMode.Append).insertInto("dws.dws_qz_course")
+//    dwsQzCourseDf.show()
+        dwsQzCourseDf.coalesce(1).write.mode(SaveMode.Append).insertInto("dws.dws_qz_course")
   }
 
   /**
@@ -154,8 +154,8 @@ object DwsQzService {
          |join dwd_qz_website t2 on t1.siteid=t2.siteid and t1.dn=t2.dn
          |join dwd_qz_business t3 on  t1.businessid=t3.businessid and t1.dn=t3.dn
        """.stripMargin)
-    dwsQzMajorDf.show()
-    //    dwsQzMajorDf.coalesce(1).write.mode(SaveMode.Append).insertInto("dws.dws_qz_major")
+//    dwsQzMajorDf.show()
+        dwsQzMajorDf.coalesce(1).write.mode(SaveMode.Append).insertInto("dws.dws_qz_major")
   }
 
   /**
@@ -164,7 +164,7 @@ object DwsQzService {
     * qz_center					  主题数据
     * qz_paper					  做题试卷日志数据
     */
-  def saveDwsQzPager(sparkSession: SparkSession, dt: String): Unit = {
+  def saveDwsQzPaper(sparkSession: SparkSession, dt: String): Unit = {
     val dwdQzPaperView = QzPaperDao.getDwdQzPaperView(sparkSession, dt)
     val dwdQzCenterPaper = QzPaperDao.getDwdQzCenterPaper(sparkSession, dt)
     val dwdQzCenter = QzPaperDao.getDwdQzCenter(sparkSession, dt)
@@ -174,7 +174,7 @@ object DwsQzService {
     dwdQzCenter.createOrReplaceTempView("qz_center")
     dwdQzPaper.createOrReplaceTempView("qz_paper")
 
-    val dwsQzPagerDf = sparkSession.sql(
+    val dwsQzPaperDf = sparkSession.sql(
       s"""
          |select
          |	 t1.paperviewid,
@@ -223,8 +223,8 @@ object DwsQzService {
          |join qz_paper t4 on t1.paperid=t4.paperid and t1.dn=t2.dn
        """.stripMargin)
 
-    dwsQzPagerDf.show()
-//    dwsQzPagerDf.coalesce(1).write.mode(SaveMode.Append).insertInto("dws.dws_qz_paper")
+//    dwsQzPaperDf.show()
+    dwsQzPaperDf.coalesce(1).write.mode(SaveMode.Append).insertInto("dws.dws_qz_paper")
   }
 
   /**
@@ -262,17 +262,17 @@ object DwsQzService {
          |	t1.difficulty,
          |	t1.quesskill,
          |	t1.vdeoaddr,
-         |	t1.viewtypename,
+         |	t2.viewtypename,
          |	t2.papertypename,
-         |    t2.remark,
+         |  t2.remark,
          |	t2.splitscoretype,
          |	t1.dt,
          |	t1.dn
          |from qz_question t1
          |join qz_question_type t2 on t1.questypeid=t2.questypeid and t1.dn=t2.dn
        """.stripMargin)
-    dwsQzQuestionDf.show()
-    dwsQzQuestionDf.coalesce(1).write.mode(SaveMode.Append).insertInto("coalesce")
+//    dwsQzQuestionDf.show()
+    dwsQzQuestionDf.coalesce(1).write.mode(SaveMode.Append).insertInto("dws.dws_qz_question")
 
   }
 }
