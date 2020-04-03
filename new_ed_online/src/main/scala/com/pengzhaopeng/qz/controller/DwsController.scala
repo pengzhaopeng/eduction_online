@@ -21,7 +21,7 @@ object DwsController {
 
     val sparkSession = SparkSession.builder()
       .config(sparkConf)
-      .config("spark.debug.maxToStringFields", "100")
+      .config("spark.debug.maxToStringFields", "200")
       .enableHiveSupport().getOrCreate()
 
     val ssc = sparkSession.sparkContext
@@ -35,8 +35,8 @@ object DwsController {
 //    DwsQzService.saveDwsQzCourse(sparkSession, dt)
 //    DwsQzService.saveDwsQzMajor(sparkSession, dt)
 //    DwsQzService.saveDwsQzPaper(sparkSession, dt)
-    DwsQzService.saveDwsQzQuestion(sparkSession, dt)
-//    DwsQzService.saveDwsUserPaperDetail(sparkSession, dt)
+//    DwsQzService.saveDwsQzQuestion(sparkSession, dt)
+    DwsQzService.saveDwsUserPaperDetail(sparkSession, dt)
 
     while (true){
       Thread.sleep(5000)
