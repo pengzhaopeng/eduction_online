@@ -33,7 +33,7 @@ object DwsMemberService {
   }
 
   /**
-    * 使用sql方式 + 默认走 sortMerageJoin
+    * 使用sql方式
     *
     * @param sparkSession
     * @param dt
@@ -74,10 +74,10 @@ object DwsMemberService {
           |)t1
           |group by uid,dn,dt
            """.stripMargin).coalesce(3).write.mode(SaveMode.Overwrite).insertInto("dws.dws_member")
-    while (true) {
-      Thread.sleep(5000)
-      println("sql")
-    }
+//    while (true) {
+//      Thread.sleep(5000)
+//      println("sql")
+//    }
   }
 
   /**
@@ -143,10 +143,10 @@ object DwsMemberService {
          |)t1
          |group by uid,dn,dt
            """.stripMargin).show()
-    while (true) {
-      Thread.sleep(5000)
-      println("sql")
-    }
+//    while (true) {
+//      Thread.sleep(5000)
+//      println("sql")
+//    }
   }
 
   /**
@@ -178,10 +178,10 @@ object DwsMemberService {
       //      .as[DwsMember].rdd
 //      .as[DwsMember]
 //    result.cache() //序列化缓存
-    result.show()
-    while (true) {
-      Thread.sleep(5000)
-      println("api")
-    }
+//    result.show()
+//    while (true) {
+//      Thread.sleep(5000)
+//      println("api")
+//    }
   }
 }

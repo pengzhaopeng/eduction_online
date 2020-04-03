@@ -14,7 +14,8 @@ import org.apache.spark.sql.SparkSession
 object DwsController {
   def main(args: Array[String]): Unit = {
     System.setProperty("HADOOP_USER_NAME", "dog")
-    val sparkConf = new SparkConf().setAppName("dws_qz_controller").setMaster("local[*]")
+    val sparkConf = new SparkConf().setAppName("dws_qz_controller")
+//      .setMaster("local[*]")
 
     //设置广播的表
     sparkConf.set("spark.sql.autoBroadcastJoinThreshold", "104857600") //100m
