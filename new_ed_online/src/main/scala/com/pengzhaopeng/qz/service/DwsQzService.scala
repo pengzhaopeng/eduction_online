@@ -279,7 +279,7 @@ object DwsQzService {
   }
 
   /**
-    * 用户做题详情退化大宽表
+    * 用户做题详情退化大宽表s
     * 学员做题详情数据表 + 章节维度 + 课程维度 + 主修维度 + 试卷维度 + 题目维度
     * dws_user_paper_detail
     * dws_qz_chapter
