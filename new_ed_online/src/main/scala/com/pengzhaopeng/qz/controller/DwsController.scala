@@ -15,7 +15,7 @@ object DwsController {
   def main(args: Array[String]): Unit = {
     System.setProperty("HADOOP_USER_NAME", "dog")
     val sparkConf = new SparkConf().setAppName("dws_qz_controller")
-//      .setMaster("local[*]")
+      .setMaster("local[*]")
 
     //设置广播的表
     sparkConf.set("spark.sql.autoBroadcastJoinThreshold", "104857600") //100m
@@ -36,7 +36,7 @@ object DwsController {
 //    DwsQzService.saveDwsQzCourse(sparkSession, dt)
 //    DwsQzService.saveDwsQzMajor(sparkSession, dt)
 //    DwsQzService.saveDwsQzPaper(sparkSession, dt)
-//    DwsQzService.saveDwsQzQuestion(sparkSession, dt)
+//    DwsQzService.saveDwsQzQuestionTpe(sparkSession, dt)
     DwsQzService.saveDwsUserPaperDetail(sparkSession, dt)
 
     while (true){
