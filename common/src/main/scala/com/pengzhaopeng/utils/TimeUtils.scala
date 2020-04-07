@@ -103,9 +103,9 @@ object TimeUtils {
     //    val sdf2 = new SimpleDateFormat("EEEE")
     //    sdf2.format(date)
 
-    val cal = Calendar.getInstance();
+    val cal = Calendar.getInstance()
     cal.setTime(date);
-    var w = cal.get(Calendar.DAY_OF_WEEK) - 1;
+    var w = cal.get(Calendar.DAY_OF_WEEK) - 1
 
     //星期天 默认为0
     if (w <= 0)
