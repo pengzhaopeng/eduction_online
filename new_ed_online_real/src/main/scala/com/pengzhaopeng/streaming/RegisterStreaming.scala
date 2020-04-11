@@ -1,12 +1,13 @@
 package com.pengzhaopeng.streaming
 
+import java.lang
 import java.sql.{Connection, ResultSet}
 
 import com.pengzhaopeng.utils.{ConfigurationManager, DataSourceUtil, QueryCallback, SqlProxy}
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.StringDeserializer
-import org.apache.spark.streaming.dstream.InputDStream
+import org.apache.spark.streaming.dstream.{DStream, InputDStream}
 import org.apache.spark.streaming.kafka010.{ConsumerStrategies, KafkaUtils, LocationStrategies}
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.streaming.{Seconds, StreamingContext}
@@ -22,6 +23,8 @@ import scala.collection.mutable
   */
 object RegisterStreaming {
 
+  private val batchDuration = 3
+
   def main(args: Array[String]): Unit = {
     //设置基础参数
     System.setProperty("HADOOP_USER_NAME", "dog")
@@ -32,7 +35,7 @@ object RegisterStreaming {
       .set("spark.streaming.backpressure.enabled", "true")
       .set("spark.streaming.stopGracefullyOnShutdown", "true")
       .setMaster("local[*]")
-    val ssc = new StreamingContext(conf, Seconds(3))
+    val ssc = new StreamingContext(conf, Seconds(batchDuration))
     val sparkContext: SparkContext = ssc.sparkContext
 
     //设置kafka参数
@@ -44,7 +47,7 @@ object RegisterStreaming {
       "value.deserializer" -> classOf[StringDeserializer],
       "group.id" -> groupid,
       "auto.offset.reset" -> "earliest",
-      "enable.auto.commit" -> (false: java.lang.Boolean)
+      "enable.auto.commit" -> (false: lang.Boolean)
     )
 
     //设置 HA 的高可用
@@ -93,7 +96,7 @@ object RegisterStreaming {
     }
 
     //清洗数据
-    stream
+    val filterRDD: DStream[(String, Int)] = stream
       .filter(item => {
         item.value().split("\t").length == 3
       })
@@ -106,12 +109,54 @@ object RegisterStreaming {
             case "2" => "APP"
             case "3" => "Other"
           }
-          (app_name,1)
+          (app_name, 1)
         })
       })
+
+    filterRDD.cache()
+    //需求一：实时统计注册人数，批次为3秒一批，使用updateStateBykey算子计算历史数据和当前批次的数据总数
+    appRegisterCounts(filterRDD)
+
+    //需求二：每6秒统统计一次1分钟内的注册数据，不需要历史数据 提示:reduceByKeyAndWindow算子
+//    appRigisterCountsBy1Minute(filterRDD)
 
     //处理完业务逻辑后手动提交 offset 维护到本地 mysql 中
 
     //优雅停止
+    ssc.start()
+    ssc.awaitTermination()
+  }
+
+  /**
+    * 实时统计注册人数，加历史数据
+    */
+  private def appRegisterCounts(filterRDD: DStream[(String, Int)]) = {
+
+    filterRDD.updateStateByKey(updateFunc).print()
+  }
+
+  def updateFunc(values: Seq[Int], state: Option[Int]) = {
+    //    var value = 0
+    //    for (elem <- values) {
+    //      value += elem
+    //    }
+    //本批次求和
+    val currentCount: Int = values.sum
+    //历史数据
+    val previousCount: Int = state.getOrElse(0)
+    Some(currentCount + previousCount)
+  }
+
+  /**
+    * 每6秒统统计一次1分钟内的注册数据
+    *
+    * @param
+    */
+  private def appRigisterCountsBy1Minute(filterRDD: DStream[(String, Int)]) = {
+    filterRDD.reduceByKeyAndWindow(
+      (x: Int, y: Int) => x + y,
+      Seconds(batchDuration * 20),
+      Seconds(batchDuration)
+    ).print()
   }
 }
