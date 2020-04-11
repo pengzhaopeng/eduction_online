@@ -8,7 +8,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.apache.spark.streaming.dstream.{DStream, InputDStream}
-import org.apache.spark.streaming.kafka010.{ConsumerStrategies, KafkaUtils, LocationStrategies}
+import org.apache.spark.streaming.kafka010._
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.streaming.{Seconds, StreamingContext}
 
@@ -54,6 +54,8 @@ object RegisterStreaming {
     sparkContext.hadoopConfiguration.set("fs.defaultFS", "hdfs://nameservice1")
     sparkContext.hadoopConfiguration.set("dfs.nameservices", "nameservice1")
 
+    ssc.checkpoint("")
+
     //查询mysql中是否有偏移量
     val sqlProxy = new SqlProxy()
     val client: Connection = DataSourceUtil.getConnection
@@ -61,7 +63,7 @@ object RegisterStreaming {
     val queryOffsetSql: String =
       s"""
          |select
-         |
+         |  *
          |from `offset_manager`
          |where `groupid`=$groupid
        """.stripMargin
@@ -96,7 +98,53 @@ object RegisterStreaming {
     }
 
     //清洗数据
-    val filterRDD: DStream[(String, Int)] = stream
+    val filterRDD: DStream[(String, Int)] = filterData(stream)
+
+    filterRDD.cache()
+    //需求一：实时统计注册人数，批次为3秒一批，使用updateStateBykey算子计算历史数据和当前批次的数据总数
+    appRegisterCounts(filterRDD)
+
+    //需求二：每6秒统统计一次1分钟内的注册数据，不需要历史数据 提示:reduceByKeyAndWindow算子
+    //    appRigisterCountsBy1Minute(filterRDD)
+
+    //处理完业务逻辑后手动提交 offset 维护到本地 mysql 中
+    stream.foreachRDD(rdd => {
+      if (!rdd.isEmpty()) {
+        val sqlProxy = new SqlProxy()
+        val client: Connection = DataSourceUtil.getConnection
+        try {
+          val offsetRanges: Array[OffsetRange] = rdd.asInstanceOf[HasOffsetRanges].offsetRanges
+          for (elem <- offsetRanges) {
+            sqlProxy.executeUpdate(
+              client,
+              s"""
+                 |replace into `offset_manager` (`groupid`,`topic`,`partition`,`untilOffset`)
+                 | values(?,?,?,?)
+             """.stripMargin,
+              Array(groupid, elem.topic, elem.partition, elem.untilOffset))
+          }
+        } catch {
+          case e: Exception => e.printStackTrace()
+        } finally {
+          sqlProxy.shutdown(client)
+        }
+
+      }
+    })
+
+    //优雅停止
+    ssc.start()
+    ssc.awaitTermination()
+  }
+
+  /**
+    * 清洗数据
+    *
+    * @param stream
+    * @return
+    */
+  private def filterData(stream: InputDStream[ConsumerRecord[String, String]]) = {
+    stream
       .filter(item => {
         item.value().split("\t").length == 3
       })
@@ -112,26 +160,12 @@ object RegisterStreaming {
           (app_name, 1)
         })
       })
-
-    filterRDD.cache()
-    //需求一：实时统计注册人数，批次为3秒一批，使用updateStateBykey算子计算历史数据和当前批次的数据总数
-    appRegisterCounts(filterRDD)
-
-    //需求二：每6秒统统计一次1分钟内的注册数据，不需要历史数据 提示:reduceByKeyAndWindow算子
-//    appRigisterCountsBy1Minute(filterRDD)
-
-    //处理完业务逻辑后手动提交 offset 维护到本地 mysql 中
-
-    //优雅停止
-    ssc.start()
-    ssc.awaitTermination()
   }
 
   /**
     * 实时统计注册人数，加历史数据
     */
   private def appRegisterCounts(filterRDD: DStream[(String, Int)]) = {
-
     filterRDD.updateStateByKey(updateFunc).print()
   }
 
