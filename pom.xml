@@ -13,6 +13,7 @@
         <module>mock_data</module>
         <module>etl_data</module>
         <module>new_ed_online</module>
+        <module>new_ed_online_real</module>
     </modules>
     <packaging>pom</packaging>
 
@@ -99,7 +100,7 @@
 
             <dependency>
                 <groupId>org.apache.spark</groupId>
-                <artifactId>spark-streaming-kafka-0-8_2.11</artifactId>
+                <artifactId>spark-streaming-kafka-0-10_2.11</artifactId>
                 <version>${spark.version}</version>
             </dependency>
 
