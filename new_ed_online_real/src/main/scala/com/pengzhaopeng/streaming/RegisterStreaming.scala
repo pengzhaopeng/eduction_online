@@ -53,9 +53,7 @@ object RegisterStreaming {
     //设置 HA 的高可用
     sparkContext.hadoopConfiguration.set("fs.defaultFS", "hdfs://nameservice1")
     sparkContext.hadoopConfiguration.set("dfs.nameservices", "nameservice1")
-
-    ssc.checkpoint("")
-
+    ssc.checkpoint("/user/dog/sparkstreaming/checkpoint")
     //查询mysql中是否有偏移量
     val sqlProxy = new SqlProxy()
     val client: Connection = DataSourceUtil.getConnection
@@ -65,10 +63,10 @@ object RegisterStreaming {
          |select
          |  *
          |from `offset_manager`
-         |where `groupid`=$groupid
+         |where `groupid`=?
        """.stripMargin
     try {
-      sqlProxy.executeQuery(client, queryOffsetSql, null, new QueryCallback {
+      sqlProxy.executeQuery(client, queryOffsetSql, Array(groupid), new QueryCallback {
         override def process(rs: ResultSet): Unit = {
           while (rs.next()) {
             val model = new TopicPartition(rs.getString(2), rs.getInt(3))
@@ -102,10 +100,10 @@ object RegisterStreaming {
 
     filterRDD.cache()
     //需求一：实时统计注册人数，批次为3秒一批，使用updateStateBykey算子计算历史数据和当前批次的数据总数
-    appRegisterCounts(filterRDD)
+    //    appRegisterCounts(filterRDD)
 
     //需求二：每6秒统统计一次1分钟内的注册数据，不需要历史数据 提示:reduceByKeyAndWindow算子
-    //    appRigisterCountsBy1Minute(filterRDD)
+    appRigisterCountsBy1Minute(filterRDD)
 
     //处理完业务逻辑后手动提交 offset 维护到本地 mysql 中
     stream.foreachRDD(rdd => {
@@ -122,6 +120,7 @@ object RegisterStreaming {
                  | values(?,?,?,?)
              """.stripMargin,
               Array(groupid, elem.topic, elem.partition, elem.untilOffset))
+            //            println("偏移量："+ groupid, elem.topic, elem.partition, elem.untilOffset)
           }
         } catch {
           case e: Exception => e.printStackTrace()
@@ -165,17 +164,17 @@ object RegisterStreaming {
   /**
     * 实时统计注册人数，加历史数据
     */
-  private def appRegisterCounts(filterRDD: DStream[(String, Int)]) = {
+  private def appRegisterCounts(filterRDD: DStream[(String, Int)]): Unit = {
     filterRDD.updateStateByKey(updateFunc).print()
   }
 
-  def updateFunc(values: Seq[Int], state: Option[Int]) = {
-    //    var value = 0
-    //    for (elem <- values) {
-    //      value += elem
-    //    }
+  def updateFunc(values: Seq[Int], state: Option[Int]): Some[Int] = {
+    var currentCount = 0
+    for (elem <- values) {
+      currentCount += elem
+    }
     //本批次求和
-    val currentCount: Int = values.sum
+    //    val currentCount: Int = values.sum
     //历史数据
     val previousCount: Int = state.getOrElse(0)
     Some(currentCount + previousCount)
