@@ -4,6 +4,7 @@ import org.joda.time.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.text.SimpleDateFormat;
 import java.util.Date;
 
 /**
@@ -14,7 +15,8 @@ public class JodaTimeUtil {
     private static final Logger LOGGER = LoggerFactory.getLogger(JodaTimeUtil.class);
 
     public static void main(String[] args) {
-        System.out.println(formatDateToString(1577030400000L));
+//        System.out.println(formatDateToString(1577030400000L));
+        System.out.println(getCurrentTimeStr(null));
     }
 
     private JodaTimeUtil() {
@@ -42,6 +44,19 @@ public class JodaTimeUtil {
      */
     public static long getCurrentSecondMillis() {
         return DateTimeUtils.currentTimeMillis();
+    }
+
+    /**
+     * 获取当前系统的时间（字符串）
+     *
+     * @return
+     */
+    public static String getCurrentTimeStr(String pattern) {
+        if (StringUtil.isEmpty(pattern)) {
+            pattern = "yyyy-MM-dd HH:mm:ss";
+        }
+        SimpleDateFormat df = new SimpleDateFormat(pattern);//设置日期格式
+        return df.format(new Date());
     }
 
     /**

@@ -151,7 +151,8 @@ object QzPointStreaming {
     val courseid: Int = keys(1).toInt
     val pointid: Int = keys(2).toInt
     //对当前批次的数据下的 question 去重
-    val questionids: Array[String] = iters.toArray.map(_.questionid).distinct
+    val arr = iters.toArray
+    val questionids: Array[String] = arr.map(_.questionid).distinct
     //查询历史数据
     val historySql: String =
       s"""
@@ -171,6 +172,18 @@ object QzPointStreaming {
     })
     //历史数据和当前数据去重，拼接回写回msql
     val resultQuestionIds: Array[String] = questionid_history.union(questionids).distinct
+    //生成字符串回写到mysql
+    val resultQuestionIdsStr: String = resultQuestionIds.mkString(",")
+    //去重完的题目个数
+    val countSize: Int = resultQuestionIds.length
+    //当前批次的题总数
+    val qzSum: Int = arr.length
+    //统计当前批次做题的正确题个数
+    val qzIsTrue: Int = arr.count(_.istrue.equals("1"))
+    //获取最早的创建时间 作为表中创建时间
+    val createTime: String = arr.map(_.createTime).min
 
+    //将去重后的数据回写mysql
+    
   }
 }

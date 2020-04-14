@@ -11,5 +11,6 @@ object Test {
     val arr1 = Array("0", "4", "8")
     val arr2 = Array("0", "1", "2", "3", "4", "9")
     println(arr1.union(arr2).toList.distinct)
+    println(arr1.toList)
   }
 }

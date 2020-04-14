@@ -14,12 +14,12 @@ import com.github.nscala_time.time.Imports.DateTime
 object TimeUtils {
 
   def main(args: Array[String]): Unit = {
-//        val time: Long = convertDateStr2TimeStamp("2020-02-24", DAY_DATE_FORMAT_ONE)
+    //        val time: Long = convertDateStr2TimeStamp("2020-02-24", DAY_DATE_FORMAT_ONE)
     //    val time: Int = dayOfWeek("2020-02-25")
-//    val time = dateFormat("2020-02-24", "yyyy年MM月dd日")
+    //    val time = dateFormat("2020-02-24", "yyyy年MM月dd日")
     import com.github.nscala_time.time.Imports._
-    val time = DateTime.parse("20150101", DateTimeFormat .forPattern("yyyyMMdd"))
-    println("结果时间：" + time)
+    val time = DateTime.parse("20150101", DateTimeFormat.forPattern("yyyyMMdd"))
+    println("结果时间：" + DateTime.formatted(SECOND_DATE_FORMAT))
   }
 
   final val ONE_HOUR_MILLISECONDS = 60 * 60 * 1000
@@ -30,6 +30,9 @@ object TimeUtils {
 
   final val DAY_DATE_FORMAT_TWO = "yyyyMMdd"
 
+  //  def getCurrentTime(): Unit ={
+  //
+  //  }
 
   //时间字符串=>时间戳
   def convertDateStr2TimeStamp(dateStr: String, pattern: String): Long = {
@@ -37,9 +40,9 @@ object TimeUtils {
   }
 
   //时间字符串+天数=>时间戳
-//  def dateStrAddDays2TimeStamp(dateStr: String, pattern: String, days: Int): Long = {
-//    convertDateStr2Date(dateStr, pattern).plusDays(days).date.getTime
-//  }
+  //  def dateStrAddDays2TimeStamp(dateStr: String, pattern: String, days: Int): Long = {
+  //    convertDateStr2Date(dateStr, pattern).plusDays(days).date.getTime
+  //  }
 
 
   //时间字符串=>日期
