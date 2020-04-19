@@ -4,7 +4,7 @@ import java.lang
 import java.sql.{Connection, ResultSet}
 
 import com.pengzhaopeng.bean.QzLog
-import com.pengzhaopeng.utils.{ConfigurationManager, DataSourceUtil, QueryCallback, SqlProxy}
+import com.pengzhaopeng.utils._
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.StringDeserializer
@@ -102,9 +102,15 @@ object QzPointStreaming {
         //在分区下获取jdbc的连接
         val sqlProxy = new SqlProxy
         val client: Connection = DataSourceUtil.getConnection
-        partition.foreach {
-          //需求分析
-          case (key, iters) => appQzAccuracyAnalysis(key, iters, sqlProxy, client)
+        try {
+          partition.foreach {
+            //需求分析
+            case (key, iters) => appQzAccuracyAnalysis(key, iters, sqlProxy, client)
+          }
+        } catch {
+          case e: Exception => e.printStackTrace()
+        } finally {
+          sqlProxy.shutdown(client)
         }
       })
     })
@@ -162,28 +168,85 @@ object QzPointStreaming {
          |where userid=? and courseid=? and pointid=?
        """.stripMargin
     var questionid_history: Array[String] = Array()
-    sqlProxy.executeQuery(client, historySql, Array(userid, courseid, pointid), new QueryCallback {
-      override def process(rs: ResultSet): Unit = {
-        while (rs.next()) {
-          questionid_history = rs.getString(1).split(",")
+    sqlProxy.executeQuery(client,
+      historySql,
+      //      "select questionids from qz_point_history where userid=1001 and courseid=501 and pointid=12",
+      Array(userid, courseid, pointid), new QueryCallback {
+        override def process(rs: ResultSet): Unit = {
+          while (rs.next()) {
+            questionid_history = rs.getString(1).split(",")
+            if (userid == 1001) {
+              println("过滤前的历史questionids:" + "userid:1001 ----" + questionid_history.toList)
+
+            }
+          }
+          rs.close()
         }
-        rs.close()
-      }
-    })
+      })
     //历史数据和当前数据去重，拼接回写回msql
-    val resultQuestionIds: Array[String] = questionid_history.union(questionids).distinct
+    val resultQuestionIds: Array[String] = questionids.union(questionid_history).distinct
+
+    //    if (userid == 1001) {
+    //      println("过滤前的历史questionids:" + "userid:1001 ----" + questionid_history.toList)
+    //      println("过滤前的当前批次questionids:" + "userid:1001 ----" + questionids.toList)
+    //      println("过滤后的questionids:" + "userid:1001 ----" + resultQuestionIds.toList)
+    //    }
     //生成字符串回写到mysql
     val resultQuestionIdsStr: String = resultQuestionIds.mkString(",")
     //去重完的题目个数
     val countSize: Int = resultQuestionIds.length
     //当前批次的题总数
-    val qzSum: Int = arr.length
+    var qzSum: Int = arr.length
     //统计当前批次做题的正确题个数
-    val qzIsTrue: Int = arr.count(_.istrue.equals("1"))
+    var qzIsTrue: Int = arr.count(_.istrue.equals("1"))
     //获取最早的创建时间 作为表中创建时间
     val createTime: String = arr.map(_.createTime).min
 
-    //将去重后的数据回写mysql
-    
+    //需求一：将去重后的数据回写mysql
+    val updateTime: String = JodaTimeUtil.getCurrentTimeStr(null)
+    val updateQuestionIdsSql: String =
+      s"""
+         |insert into qz_point_history(userid,courseid,pointid,questionids,createtime,updatetime)
+         | values(?,?,?,?,?,?)
+         | on duplicate key update questionids=?,updatetime=?
+       """.stripMargin
+    sqlProxy.executeUpdate(client,
+      updateQuestionIdsSql,
+      Array(userid, courseid, pointid, resultQuestionIdsStr, createTime, createTime, resultQuestionIdsStr, updateTime))
+
+
+    //需求二：获取做题总数和做题正确的总数 从而求得正确率
+    var qzSum_history = 0
+    var istrue_histroy = 0
+    sqlProxy.executeQuery(client, "select qz_sum,qz_istrue from qz_point_detail where userid=? and courseid=? and pointid=?",
+      Array(userid, courseid, pointid), new QueryCallback {
+        override def process(rs: ResultSet): Unit = {
+          while (rs.next()) {
+            qzSum_history += rs.getInt(1)
+            istrue_histroy += rs.getInt(2)
+          }
+          rs.close()
+        }
+      })
+    qzSum += qzSum_history
+    qzIsTrue += istrue_histroy
+    val correct_rate = qzIsTrue.toDouble / qzSum.toDouble
+    //需求三：计算完成率
+    //步骤：假设每个知识点一共有30道题，先计算做题情况（做题数/总题数），然后做题情况 * 正确率 得出完成率
+    //如果都做了，完成率就等于 正确率
+    //这里的做题数是去重后的有效题数
+    val qz_detail_rate = countSize / 30
+    val mastery_rate = qz_detail_rate * correct_rate
+    //更新回mysql
+    val updateQzPointDeatilSql =
+      s"""
+         |insert into qz_point_detail(userid,courseid,pointid,qz_sum,qz_count,qz_istrue,correct_rate,mastery_rate,createtime,updatetime)
+         | values(?,?,?,?,?,?,?,?,?,?)
+         | on duplicate key update qz_sum=?,qz_count=?,qz_istrue=?,correct_rate=?,mastery_rate=?,updatetime=?
+           """.stripMargin
+    sqlProxy.executeUpdate(client,
+      updateQzPointDeatilSql,
+      Array(userid, courseid, pointid, qzSum, countSize, qzIsTrue, correct_rate, mastery_rate, createTime, updateTime,
+        qzSum, countSize, qzIsTrue, correct_rate, mastery_rate, updateTime))
   }
 }

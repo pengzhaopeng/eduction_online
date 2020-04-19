@@ -12,6 +12,13 @@
     <artifactId>new_ed_online_real</artifactId>
 
     <dependencies>
+        <!--公共工具类模块-->
+        <dependency>
+            <groupId>com.pengzhaopeng</groupId>
+            <artifactId>common</artifactId>
+            <version>1.0-SNAPSHOT</version>
+        </dependency>
+
         <!-- Spark的依赖引入 -->
         <dependency>
             <groupId>org.apache.spark</groupId>
@@ -28,8 +35,8 @@
         <dependency>
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-streaming_2.11</artifactId>
-            <!--<scope>provided</scope>-->
             <version>${spark.version}</version>
+            <!--<scope>provided</scope>-->
         </dependency>
         <dependency>
             <groupId>org.apache.spark</groupId>
@@ -41,7 +48,7 @@
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-streaming-kafka-0-10_2.11</artifactId>
             <version>${spark.version}</version>
-            <!-- <scope>provided</scope>-->
+             <!--<scope>provided</scope>-->
         </dependency>
 
         <!-- 引入Scala -->
