@@ -15,3 +15,12 @@ case class QzLog(
                   istrue: String,
                   createTime: String
                 )
+
+case class Page(
+                 uid: String,
+                 app_id: String,
+                 device_id: String,
+                 ip: String,
+                 last_page_id: String,
+                 page_id: String,
+                 next_page_id: String)
