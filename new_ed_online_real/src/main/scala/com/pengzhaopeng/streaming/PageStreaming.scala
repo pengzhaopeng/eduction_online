@@ -1,7 +1,7 @@
 package com.pengzhaopeng.streaming
 
 import java.lang
-import java.sql.ResultSet
+import java.sql.{Connection, ResultSet}
 
 import com.alibaba.fastjson.JSONObject
 import com.pengzhaopeng.bean.Page
@@ -13,7 +13,7 @@ import org.apache.kafka.common.serialization.StringDeserializer
 import org.apache.spark.SparkConf
 import org.apache.spark.streaming.{Seconds, StreamingContext}
 import org.apache.spark.streaming.dstream.{DStream, InputDStream}
-import org.apache.spark.streaming.kafka010.{ConsumerStrategies, KafkaUtils, LocationStrategies}
+import org.apache.spark.streaming.kafka010._
 
 import scala.collection.mutable
 
@@ -94,18 +94,102 @@ object PageStreaming {
           Page(uid, app_id, device_id, ip, last_page_id, page_id, next_page_id)
         })
       })
-      .filter(item => {
-        !item.last_page_id.equals("") && !item.page_id.equals("") && !item.next_page_id.equals("")
-      })
+    //      .filter(item => {
+    //        !item.last_page_id.equals("") && !item.page_id.equals("") && !item.next_page_id.equals("")
+    //      })
     //下面业务会多次使用到 filterRDD 这里先缓存
     filterDs.cache()
 
     //业务
+    val resultDS: DStream[(String, Int)] = filterDs.map(item => (item.last_page_id + "_" + item.page_id + "_" + item.next_page_id, 1))
+      .reduceByKey(_ + _)
+    resultDS.foreachRDD(rdd => {
+      rdd.foreachPartition(partition => {
+        //在分区下获取jdbc连接
+        val sqlProxy = new SqlProxy
+        val client = DataSourceUtil.getConnection
+        try {
+          partition.foreach(item => {
+            //计算页面跳转个数
+            calcPageJumCount(sqlProxy, item, client)
+          })
+        } catch {
+          case e: Exception => e.printStackTrace()
+        } finally {
+          sqlProxy.shutdown(client)
+        }
+      })
+    })
 
 
     //处理完业务逻辑 提交 offset 到mysql
+    stream.foreachRDD(rdd => {
+      val sqlProxy = new SqlProxy
+      val client = DataSourceUtil.getConnection
+      try {
+        val offsetRanges: Array[OffsetRange] = rdd.asInstanceOf[HasOffsetRanges].offsetRanges
+        for (elem <- offsetRanges) {
+          sqlProxy.executeUpdate(client, "replace into `offset_manager` (`groupid`,`topic`,`partition`,untilOffset) values(?,?,?,?)",
+            Array(groupid, elem.topic, elem.partition.toString, elem.untilOffset))
+        }
+      } catch {
+        case e: Exception => e.printStackTrace()
+      } finally {
+        sqlProxy.shutdown(client)
+      }
+    })
 
     ssc.start()
     ssc.awaitTermination()
+  }
+
+  /**
+    * 计算页面跳转个数
+    *
+    * @param sqlProxy
+    * @param item
+    * @param client
+    */
+  def calcPageJumCount(sqlProxy: SqlProxy, item: (String, Int), client: Connection) = {
+    //从mysql取当前page 的跳转个数，跟当前批次进行累加，再更新回mysql
+    val fileds: Array[String] = item._1.split("_")
+    val last_page_id: Int = fileds(0).toInt //上一个page_id
+    val page_id: Int = fileds(1).toInt //当前page_id
+    val next_page_id = fileds(2).toInt //下一个page_id
+    //查询 page_id 的历史个数
+    val pageIdNumHistorySql =
+    s"""
+       |select
+       |  num
+       |from page_jump_rate
+       |where page_id=?
+       """.stripMargin
+    var num: Long = item._2
+    sqlProxy.executeQuery(client, pageIdNumHistorySql, Array(page_id), new QueryCallback {
+      override def process(rs: ResultSet): Unit = {
+        while (rs.next()) {
+          num += rs.getLong(1)
+        }
+        rs.close()
+      }
+    })
+    //判断page_id是否是首页，是首页当前page_id跳转率就是100%
+    if (page_id == 1) {
+      val updateSql: String =
+        s"""
+           |insert into page_jump_rate(last_page_id,page_id,next_page_id,num,jump_rate)
+           |values(?,?,?,?,?)
+           |on duplicate key update num=num+?
+         """.stripMargin
+      sqlProxy.executeUpdate(client, updateSql, Array(last_page_id, page_id, next_page_id, num, "100%", num))
+    } else {
+      val updateSql: String =
+        s"""
+           |insert into page_jump_rate(last_page_id,page_id,next_page_id,num)
+           |values(?,?,?,?)
+           |on duplicate key update num=num+?
+         """.stripMargin
+      sqlProxy.executeUpdate(client, updateSql, Array(last_page_id, page_id, next_page_id, num, num))
+    }
   }
 }
