@@ -2,6 +2,7 @@ package com.pengzhaopeng.streaming
 
 import java.lang
 import java.sql.{Connection, ResultSet}
+import java.text.NumberFormat
 
 import com.alibaba.fastjson.JSONObject
 import com.pengzhaopeng.bean.Page
@@ -10,10 +11,11 @@ import com.pengzhaopeng.utils._
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.StringDeserializer
-import org.apache.spark.SparkConf
+import org.apache.spark.{SparkConf, SparkFiles}
 import org.apache.spark.streaming.{Seconds, StreamingContext}
 import org.apache.spark.streaming.dstream.{DStream, InputDStream}
 import org.apache.spark.streaming.kafka010._
+import org.lionsoul.ip2region.{DbConfig, DbSearcher}
 
 import scala.collection.mutable
 
@@ -101,6 +103,7 @@ object PageStreaming {
     filterDs.cache()
 
     //业务
+    //需求1：计算各个页面的跳转个数
     val resultDS: DStream[(String, Int)] = filterDs.map(item => (item.last_page_id + "_" + item.page_id + "_" + item.next_page_id, 1))
       .reduceByKey(_ + _)
     resultDS.foreachRDD(rdd => {
@@ -121,11 +124,37 @@ object PageStreaming {
       })
     })
 
+    //需求三：根据ip得出相应省份，展示出 top3 省份的点击数，需要根据历史数据累加
+    //广播地址库
+    ssc.sparkContext.addFile(this.getClass.getResource("/ip2region.db").getPath) //local
+    //    ssc.sparkContext.addFile("hdfs://nameservice1/user/..../ip2region.db") //yarn
+    //获取 当前批次 ip ds(privinceid,1)
+    val ipDs: DStream[(String, Long)] = filterDs.mapPartitions(partitions => {
+      val dfFile: String = SparkFiles.get("ip2region.db")
+      val ipsearch = new DbSearcher(new DbConfig(), dfFile)
+      partitions.map(item => {
+        val ip: String = item.ip
+        //获取ip详情   中国|0|上海|上海市|有线通
+        val province: String = ipsearch.memorySearch(ip).getRegion.split("\\|")(2)
+        //根据省份，统计点击个数
+        (province, 1L)
+      })
+    }).reduceByKey(_ + _)
+    //mysql查询历史数据，跟当前数据进行合并并更新回mysql
+    ipDs.foreachRDD(rdd =>{
+      //查询历史数据
+      val ipSqlProxy = new SqlProxy
+      val connection: Connection = DataSourceUtil.getConnection
+      //这里直接在driver获取历史数据，地址的历史数据不多
+//      ipSqlProxy.executeQuery(client,"select province ")
+    })
 
     //处理完业务逻辑 提交 offset 到mysql
     stream.foreachRDD(rdd => {
       val sqlProxy = new SqlProxy
       val client = DataSourceUtil.getConnection
+      //需求2：根据页面跳转个数表计算转换率，没必要放到sparkStreaming中来做,只要处理一次，所以这里放driver端来做,处理完直接更新偏移量
+      calcJumRate(sqlProxy, client)
       try {
         val offsetRanges: Array[OffsetRange] = rdd.asInstanceOf[HasOffsetRanges].offsetRanges
         for (elem <- offsetRanges) {
@@ -141,6 +170,42 @@ object PageStreaming {
 
     ssc.start()
     ssc.awaitTermination()
+  }
+
+  /**
+    * 计算转换率
+    */
+  def calcJumRate(sqlProxy: SqlProxy, client: Connection) = {
+    var page1_num = 0L
+    var page2_num = 0L
+    var page3_num = 0L
+    sqlProxy.executeQuery(client, "select num from page_jump_rate where page_id=?", Array(1), new QueryCallback {
+      override def process(rs: ResultSet): Unit = {
+        while (rs.next()) {
+          page1_num += rs.getLong(1)
+        }
+      }
+    })
+    sqlProxy.executeQuery(client, "select num from page_jump_rate where page_id=?", Array(2), new QueryCallback {
+      override def process(rs: ResultSet): Unit = {
+        while (rs.next()) {
+          page2_num += rs.getLong(1)
+        }
+      }
+    })
+    sqlProxy.executeQuery(client, "select num from page_jump_rate where page_id=?", Array(3), new QueryCallback {
+      override def process(rs: ResultSet): Unit = {
+        while (rs.next()) {
+          page3_num += rs.getLong(1)
+        }
+      }
+    })
+    val nf = NumberFormat.getPercentInstance
+    val page1ToPage2Rate = if (page1_num == 0) "0%" else nf.format(page2_num.toDouble / page1_num.toDouble)
+    val page2ToPage3Rate = if (page2_num == 0) "0%" else nf.format(page3_num.toDouble / page2_num.toDouble)
+    //更新回去
+    sqlProxy.executeUpdate(client, "update page_jump_rate set jum_rate=? where page_id=?", Array(page1ToPage2Rate, 2))
+    sqlProxy.executeUpdate(client, "update page_jump_rate set jum_rate=? where page_id=?", Array(page2ToPage3Rate, 3))
   }
 
   /**
