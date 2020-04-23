@@ -18,13 +18,14 @@ import org.apache.spark.streaming.kafka010._
 import org.lionsoul.ip2region.{DbConfig, DbSearcher}
 
 import scala.collection.mutable
+import scala.collection.mutable.ArrayBuffer
 
 /**
-  * @author 17688700269
-  * @date 2020/4/20 21:52
-  * @Version 1.0
-  * @description 页面转换率实时统计
-  */
+ * @author 17688700269
+ * @date 2020/4/20 21:52
+ * @Version 1.0
+ * @description 页面转换率实时统计
+ */
 object PageStreaming {
 
   private val batchDuration = 3
@@ -127,7 +128,7 @@ object PageStreaming {
     //需求三：根据ip得出相应省份，展示出 top3 省份的点击数，需要根据历史数据累加
     //广播地址库
     ssc.sparkContext.addFile(this.getClass.getResource("/ip2region.db").getPath) //local
-    //    ssc.sparkContext.addFile("hdfs://nameservice1/user/..../ip2region.db") //yarn
+    //    ssc.sparkContext.addFile("hdfs://nameservice1/user/dog/resource/ip2region.db") //yarn
     //获取 当前批次 ip ds(privinceid,1)
     val ipDs: DStream[(String, Long)] = filterDs.mapPartitions(partitions => {
       val dfFile: String = SparkFiles.get("ip2region.db")
@@ -141,12 +142,26 @@ object PageStreaming {
       })
     }).reduceByKey(_ + _)
     //mysql查询历史数据，跟当前数据进行合并并更新回mysql
-    ipDs.foreachRDD(rdd =>{
+    ipDs.foreachRDD(rdd => {
       //查询历史数据
       val ipSqlProxy = new SqlProxy
       val connection: Connection = DataSourceUtil.getConnection
       //这里直接在driver获取历史数据，地址的历史数据不多
-//      ipSqlProxy.executeQuery(client,"select province ")
+      try {
+        var history_data: mutable.Seq[(String, Long)] = new ArrayBuffer[(String, Long)]()
+        ipSqlProxy.executeQuery(client, "select province,num from tmp_city_num_detail", null, new QueryCallback {
+          override def process(rs: ResultSet): Unit = {
+            while (rs.next()) {
+              val tuple = (rs.getString(1), rs.getLong(2))
+              history_data += tuple
+            }
+          }
+        })
+      } catch {
+        case e:Exception => e.printStackTrace()
+      } finally {
+        sqlProxy.shutdown(client)
+      }
     })
 
     //处理完业务逻辑 提交 offset 到mysql
@@ -173,8 +188,8 @@ object PageStreaming {
   }
 
   /**
-    * 计算转换率
-    */
+   * 计算转换率
+   */
   def calcJumRate(sqlProxy: SqlProxy, client: Connection) = {
     var page1_num = 0L
     var page2_num = 0L
@@ -209,12 +224,12 @@ object PageStreaming {
   }
 
   /**
-    * 计算页面跳转个数
-    *
-    * @param sqlProxy
-    * @param item
-    * @param client
-    */
+   * 计算页面跳转个数
+   *
+   * @param sqlProxy
+   * @param item
+   * @param client
+   */
   def calcPageJumCount(sqlProxy: SqlProxy, item: (String, Int), client: Connection) = {
     //从mysql取当前page 的跳转个数，跟当前批次进行累加，再更新回mysql
     val fileds: Array[String] = item._1.split("_")
@@ -223,11 +238,11 @@ object PageStreaming {
     val next_page_id = fileds(2).toInt //下一个page_id
     //查询 page_id 的历史个数
     val pageIdNumHistorySql =
-    s"""
-       |select
-       |  num
-       |from page_jump_rate
-       |where page_id=?
+      s"""
+         |select
+         |  num
+         |from page_jump_rate
+         |where page_id=?
        """.stripMargin
     var num: Long = item._2
     sqlProxy.executeQuery(client, pageIdNumHistorySql, Array(page_id), new QueryCallback {

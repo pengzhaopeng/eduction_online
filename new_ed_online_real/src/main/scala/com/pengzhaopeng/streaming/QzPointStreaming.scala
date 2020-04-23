@@ -148,7 +148,7 @@ object QzPointStreaming {
   /**
     * 去重后求正确率和完成率
     *
-    * @param filterDS
+    * @param
     */
   def appQzAccuracyAnalysis(key: String, iters: Iterable[QzLog], sqlProxy: SqlProxy, client: Connection) = {
     //先去重 当前批次数据和历史数据进行去重 回写到历史表并记录个数

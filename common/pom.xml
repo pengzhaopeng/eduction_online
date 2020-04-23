@@ -39,12 +39,12 @@
             <version>1.2.58</version>
         </dependency>
 
-        <dependency>
-            <groupId>org.lionsoul</groupId>
-            <artifactId>ip2region</artifactId>
-            <scope>provided</scope>
-            <version>1.4</version>
-        </dependency>
+<!--        <dependency>-->
+<!--            <groupId>org.lionsoul</groupId>-->
+<!--            <artifactId>ip2region</artifactId>-->
+<!--            <scope>provided</scope>-->
+<!--            <version>1.4</version>-->
+<!--        </dependency>-->
     </dependencies>
 
     <build>
