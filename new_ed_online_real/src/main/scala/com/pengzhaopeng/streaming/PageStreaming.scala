@@ -11,6 +11,7 @@ import com.pengzhaopeng.utils._
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.StringDeserializer
+import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkConf, SparkFiles}
 import org.apache.spark.streaming.{Seconds, StreamingContext}
 import org.apache.spark.streaming.dstream.{DStream, InputDStream}
@@ -21,11 +22,11 @@ import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
 /**
- * @author 17688700269
- * @date 2020/4/20 21:52
- * @Version 1.0
- * @description 页面转换率实时统计
- */
+  * @author 17688700269
+  * @date 2020/4/20 21:52
+  * @Version 1.0
+  * @description 页面转换率实时统计
+  */
 object PageStreaming {
 
   private val batchDuration = 3
@@ -145,20 +146,57 @@ object PageStreaming {
     ipDs.foreachRDD(rdd => {
       //查询历史数据
       val ipSqlProxy = new SqlProxy
-      val connection: Connection = DataSourceUtil.getConnection
+      val ipClient: Connection = DataSourceUtil.getConnection
       //这里直接在driver获取历史数据，地址的历史数据不多
       try {
-        var history_data: mutable.Seq[(String, Long)] = new ArrayBuffer[(String, Long)]()
+        var history_data = new ArrayBuffer[(String, Long)]()
         ipSqlProxy.executeQuery(client, "select province,num from tmp_city_num_detail", null, new QueryCallback {
           override def process(rs: ResultSet): Unit = {
             while (rs.next()) {
-              val tuple = (rs.getString(1), rs.getLong(2))
+              val tuple: (String, Long) = (rs.getString(1), rs.getLong(2))
               history_data += tuple
             }
           }
         })
+        //将历史数据转成RDD 跟 当前批次数据进行合并
+        val history_rdd = ssc.sparkContext.makeRDD(history_data)
+        val resultRDD: RDD[(String, Long)] = history_rdd.fullOuterJoin(rdd).map(item => {
+          val province: String = item._1
+          val nums = item._2._1.getOrElse(0l) + item._2._2.getOrElse(0l)
+          (province, nums)
+        })
+        resultRDD.foreachPartition(partitions => {
+          val sqlProxy = new SqlProxy
+          val client = DataSourceUtil.getConnection
+          partitions.foreach(item => {
+            //更新mysql数据，并返回最新结果数据用来求top n
+            sqlProxy.executeUpdate(client,
+              s"""
+                 |insert into tmp_city_num_detail (province,num)
+                 | values(?,?)
+                 | on duplicate key update num=?
+               """.stripMargin,
+              Array(item._1, item._2, item._2))
+          })
+        })
+        val top3RDD: Array[(String, Long)] = resultRDD.sortBy(_._2).take(3)
+        //写到mysql中去
+        //先删除
+        ipSqlProxy.executeUpdate(ipClient,
+          s"""
+             |truncate table top_city_num
+           """.stripMargin,
+          Array(null))
+        top3RDD.foreach(item => {
+          ipSqlProxy.executeUpdate(ipClient,
+            s"""
+               |insert into top_city_num (province,num)
+               | values(?,?)
+           """.stripMargin,
+            Array(item._1, item._2))
+        })
       } catch {
-        case e:Exception => e.printStackTrace()
+        case e: Exception => e.printStackTrace()
       } finally {
         sqlProxy.shutdown(client)
       }
@@ -188,8 +226,8 @@ object PageStreaming {
   }
 
   /**
-   * 计算转换率
-   */
+    * 计算转换率
+    */
   def calcJumRate(sqlProxy: SqlProxy, client: Connection) = {
     var page1_num = 0L
     var page2_num = 0L
@@ -224,12 +262,12 @@ object PageStreaming {
   }
 
   /**
-   * 计算页面跳转个数
-   *
-   * @param sqlProxy
-   * @param item
-   * @param client
-   */
+    * 计算页面跳转个数
+    *
+    * @param sqlProxy
+    * @param item
+    * @param client
+    */
   def calcPageJumCount(sqlProxy: SqlProxy, item: (String, Int), client: Connection) = {
     //从mysql取当前page 的跳转个数，跟当前批次进行累加，再更新回mysql
     val fileds: Array[String] = item._1.split("_")
@@ -238,11 +276,11 @@ object PageStreaming {
     val next_page_id = fileds(2).toInt //下一个page_id
     //查询 page_id 的历史个数
     val pageIdNumHistorySql =
-      s"""
-         |select
-         |  num
-         |from page_jump_rate
-         |where page_id=?
+    s"""
+       |select
+       |  num
+       |from page_jump_rate
+       |where page_id=?
        """.stripMargin
     var num: Long = item._2
     sqlProxy.executeQuery(client, pageIdNumHistorySql, Array(page_id), new QueryCallback {
