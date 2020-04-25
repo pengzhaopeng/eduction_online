@@ -226,7 +226,7 @@ object PageStreaming {
   }
 
   /**
-    * 计算转换 率
+    * 计算转换率
     */
   def calcJumRate(sqlProxy: SqlProxy, client: Connection) = {
     var page1_num = 0L
