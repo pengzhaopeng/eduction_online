@@ -7,7 +7,7 @@ import java.text.NumberFormat
 import com.alibaba.fastjson.JSONObject
 import com.pengzhaopeng.bean.Page
 import com.pengzhaopeng.streaming.QzPointStreaming.batchDuration
-import com.pengzhaopeng.utils._
+import com.pengzhaopeng.utils.{SqlProxy, _}
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.StringDeserializer
@@ -38,7 +38,7 @@ object PageStreaming {
       .set("spark.streaming.kafka.maxRatePerPartition", "100")
       .set("spark.streaming.backpressure.enabled", "true")
       .set("spark.streaming.stopGracefullyOnShutdown", "true")
-      .setMaster("local[*]")
+    //      .setMaster("local[*]")
     val ssc = new StreamingContext(conf, Seconds(batchDuration))
     //kafka参数
     val topics = Array(ConfigurationManager.getProperty("kafka.topic.qc.page"))
@@ -87,15 +87,7 @@ object PageStreaming {
     val filterDs: DStream[Page] = stream.map(item => item.value())
       .mapPartitions(partition => {
         partition.map(item => {
-          val jsonObject: JSONObject = ParseJsonData.getJsonData(item)
-          val uid = if (jsonObject.containsKey("uid")) jsonObject.getString("uid") else ""
-          val app_id = if (jsonObject.containsKey("app_id")) jsonObject.getString("app_id") else ""
-          val device_id = if (jsonObject.containsKey("device_id")) jsonObject.getString("device_id") else ""
-          val ip = if (jsonObject.containsKey("ip")) jsonObject.getString("ip") else ""
-          val last_page_id = if (jsonObject.containsKey("last_page_id")) jsonObject.getString("last_page_id") else ""
-          val page_id = if (jsonObject.containsKey("page_id")) jsonObject.getString("page_id") else ""
-          val next_page_id = if (jsonObject.containsKey("next_page_id")) jsonObject.getString("next_page_id") else ""
-          Page(uid, app_id, device_id, ip, last_page_id, page_id, next_page_id)
+          clearData(item) //清洗数据
         })
       })
     //      .filter(item => {
@@ -112,7 +104,7 @@ object PageStreaming {
       rdd.foreachPartition(partition => {
         //在分区下获取jdbc连接
         val sqlProxy = new SqlProxy
-        val client = DataSourceUtil.getConnection
+        val client: Connection = DataSourceUtil.getConnection
         try {
           partition.foreach(item => {
             //计算页面跳转个数
@@ -126,14 +118,67 @@ object PageStreaming {
       })
     })
 
-    //需求三：根据ip得出相应省份，展示出 top3 省份的点击数，需要根据历史数据累加
+    //需求3：根据ip得出相应省份，展示出 top3 省份的点击数，需要根据历史数据累加
+    ipForTop3Province(ssc, sqlProxy, client, filterDs)
+
+    //处理完业务逻辑 提交 offset 到mysql
+    stream.foreachRDD(rdd => {
+      val sqlProxy = new SqlProxy
+      val client = DataSourceUtil.getConnection
+      //需求2：根据页面跳转个数表计算转换率，没必要放到sparkStreaming中来做,只要处理一次，所以这里放driver端来做,处理完直接更新偏移量
+      calcJumRate(sqlProxy, client)
+      try {
+        val offsetRanges: Array[OffsetRange] = rdd.asInstanceOf[HasOffsetRanges].offsetRanges
+        for (elem <- offsetRanges) {
+          sqlProxy.executeUpdate(client, "replace into `offset_manager` (`groupid`,`topic`,`partition`,untilOffset) values(?,?,?,?)",
+            Array(groupid, elem.topic, elem.partition.toString, elem.untilOffset))
+        }
+      } catch {
+        case e: Exception => e.printStackTrace()
+      } finally {
+        sqlProxy.shutdown(client)
+      }
+    })
+
+    ssc.start()
+    ssc.awaitTermination()
+  }
+
+  /**
+    * 清洗数据
+    *
+    * @param item
+    * @return
+    */
+  private def clearData(item: String) = {
+    val jsonObject: JSONObject = ParseJsonData.getJsonData(item)
+    val uid = if (jsonObject.containsKey("uid")) jsonObject.getString("uid") else ""
+    val app_id = if (jsonObject.containsKey("app_id")) jsonObject.getString("app_id") else ""
+    val device_id = if (jsonObject.containsKey("device_id")) jsonObject.getString("device_id") else ""
+    val ip = if (jsonObject.containsKey("ip")) jsonObject.getString("ip") else ""
+    val last_page_id = if (jsonObject.containsKey("last_page_id")) jsonObject.getString("last_page_id") else ""
+    val page_id = if (jsonObject.containsKey("page_id")) jsonObject.getString("page_id") else ""
+    val next_page_id = if (jsonObject.containsKey("next_page_id")) jsonObject.getString("next_page_id") else ""
+    Page(uid, app_id, device_id, ip, last_page_id, page_id, next_page_id)
+  }
+
+  /**
+    * 根据ip得出相应省份，展示出top3省份的点击数，需要根据历史数据累加
+    *
+    * @param ssc
+    * @param client
+    * @param filterDs
+    */
+  private def ipForTop3Province(ssc: StreamingContext, sqlProxy: SqlProxy, client: Connection, filterDs: DStream[Page]) = {
     //广播地址库
-    ssc.sparkContext.addFile(this.getClass.getResource("/ip2region.db").getPath) //local
-    //    ssc.sparkContext.addFile("hdfs://nameservice1/user/dog/resource/ip2region.db") //yarn
+    //    ssc.sparkContext.addFile(this.getClass.getResource("/ip2region.db").getPath) //local
+    //    ssc.sparkContext.addFile("G:\\IDEAProject\\eduction_online\\new_ed_online_real\\src\\main\\resources\\ip2region.db") //local
+    ssc.sparkContext.addFile("hdfs://nameservice1/user/dog/resource/ip2region.db") //yarn
     //获取 当前批次 ip ds(privinceid,1)
     val ipDs: DStream[(String, Long)] = filterDs.mapPartitions(partitions => {
       val dfFile: String = SparkFiles.get("ip2region.db")
-      val ipsearch = new DbSearcher(new DbConfig(), dfFile)
+      val config = new DbConfig()
+      val ipsearch = new DbSearcher(config, dfFile)
       partitions.map(item => {
         val ip: String = item.ip
         //获取ip详情   中国|0|上海|上海市|有线通
@@ -201,28 +246,6 @@ object PageStreaming {
         sqlProxy.shutdown(client)
       }
     })
-
-    //处理完业务逻辑 提交 offset 到mysql
-    stream.foreachRDD(rdd => {
-      val sqlProxy = new SqlProxy
-      val client = DataSourceUtil.getConnection
-      //需求2：根据页面跳转个数表计算转换率，没必要放到sparkStreaming中来做,只要处理一次，所以这里放driver端来做,处理完直接更新偏移量
-      calcJumRate(sqlProxy, client)
-      try {
-        val offsetRanges: Array[OffsetRange] = rdd.asInstanceOf[HasOffsetRanges].offsetRanges
-        for (elem <- offsetRanges) {
-          sqlProxy.executeUpdate(client, "replace into `offset_manager` (`groupid`,`topic`,`partition`,untilOffset) values(?,?,?,?)",
-            Array(groupid, elem.topic, elem.partition.toString, elem.untilOffset))
-        }
-      } catch {
-        case e: Exception => e.printStackTrace()
-      } finally {
-        sqlProxy.shutdown(client)
-      }
-    })
-
-    ssc.start()
-    ssc.awaitTermination()
   }
 
   /**
@@ -257,8 +280,8 @@ object PageStreaming {
     val page1ToPage2Rate = if (page1_num == 0) "0%" else nf.format(page2_num.toDouble / page1_num.toDouble)
     val page2ToPage3Rate = if (page2_num == 0) "0%" else nf.format(page3_num.toDouble / page2_num.toDouble)
     //更新回去
-    sqlProxy.executeUpdate(client, "update page_jump_rate set jum_rate=? where page_id=?", Array(page1ToPage2Rate, 2))
-    sqlProxy.executeUpdate(client, "update page_jump_rate set jum_rate=? where page_id=?", Array(page2ToPage3Rate, 3))
+    sqlProxy.executeUpdate(client, "update page_jump_rate set jump_rate=? where page_id=?", Array(page1ToPage2Rate, 2))
+    sqlProxy.executeUpdate(client, "update page_jump_rate set jump_rate=? where page_id=?", Array(page2ToPage3Rate, 3))
   }
 
   /**
