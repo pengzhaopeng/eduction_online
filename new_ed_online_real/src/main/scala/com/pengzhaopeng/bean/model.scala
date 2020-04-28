@@ -24,3 +24,18 @@ case class Page(
                  last_page_id: String,
                  page_id: String,
                  next_page_id: String)
+
+case class LearnModel(
+                       uid: Int,
+                       cware_id: Int,
+                       video_id: Int,
+                       chapter_id: Int,
+                       edutype_id: Int,
+                       subject_id: Int,
+                       source_type: String,
+                       speed: Int,
+                       ts: Long,
+                       te: Long,
+                       ps: Int,
+                       pe: Int
+                     )
