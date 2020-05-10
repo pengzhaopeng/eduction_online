@@ -38,7 +38,7 @@ object PageStreaming {
       .set("spark.streaming.kafka.maxRatePerPartition", "100")
       .set("spark.streaming.backpressure.enabled", "true")
       .set("spark.streaming.stopGracefullyOnShutdown", "true")
-    //      .setMaster("local[*]")
+      .setMaster("local[*]")
     val ssc = new StreamingContext(conf, Seconds(batchDuration))
     //kafka参数
     val topics = Array(ConfigurationManager.getProperty("kafka.topic.qc.page"))
@@ -119,7 +119,7 @@ object PageStreaming {
     })
 
     //需求3：根据ip得出相应省份，展示出 top3 省份的点击数，需要根据历史数据累加
-    ipForTop3Province(ssc, sqlProxy, client, filterDs)
+    ipForTop3Province(ssc, filterDs)
 
     //处理完业务逻辑 提交 offset 到mysql
     stream.foreachRDD(rdd => {
@@ -169,7 +169,7 @@ object PageStreaming {
     * @param client
     * @param filterDs
     */
-  private def ipForTop3Province(ssc: StreamingContext, sqlProxy: SqlProxy, client: Connection, filterDs: DStream[Page]) = {
+  private def ipForTop3Province(ssc: StreamingContext, filterDs: DStream[Page]) = {
     //广播地址库
     //    ssc.sparkContext.addFile(this.getClass.getResource("/ip2region.db").getPath) //local
     //    ssc.sparkContext.addFile("G:\\IDEAProject\\eduction_online\\new_ed_online_real\\src\\main\\resources\\ip2region.db") //local
@@ -195,7 +195,7 @@ object PageStreaming {
       //这里直接在driver获取历史数据，地址的历史数据不多
       try {
         var history_data = new ArrayBuffer[(String, Long)]()
-        ipSqlProxy.executeQuery(client, "select province,num from tmp_city_num_detail", null, new QueryCallback {
+        ipSqlProxy.executeQuery(ipClient, "select province,num from tmp_city_num_detail", null, new QueryCallback {
           override def process(rs: ResultSet): Unit = {
             while (rs.next()) {
               val tuple: (String, Long) = (rs.getString(1), rs.getLong(2))
@@ -213,29 +213,36 @@ object PageStreaming {
         resultRDD.foreachPartition(partitions => {
           val sqlProxy = new SqlProxy
           val client = DataSourceUtil.getConnection
-          partitions.foreach(item => {
-            //更新mysql数据，并返回最新结果数据用来求top n
-            sqlProxy.executeUpdate(client,
-              s"""
-                 |insert into tmp_city_num_detail (province,num)
-                 | values(?,?)
-                 | on duplicate key update num=?
+          try {
+            partitions.foreach(item => {
+              //更新mysql数据，并返回最新结果数据用来求top n
+              sqlProxy.executeUpdate(client,
+                s"""
+                   |insert into tmp_city_num_detail(province,num)
+                   | values(?,?)
+                   | on duplicate key update num=?
                """.stripMargin,
-              Array(item._1, item._2, item._2))
-          })
+                Array(item._1, item._2, item._2))
+            })
+          } catch {
+            case  e:Exception=>e.printStackTrace()
+          }finally {
+            sqlProxy.shutdown(client)
+          }
         })
-        val top3RDD: Array[(String, Long)] = resultRDD.sortBy(_._2).take(3)
+
+        val top3RDD: Array[(String, Long)] = resultRDD.sortBy(_._2,false).take(3)
         //写到mysql中去
         //先删除
         ipSqlProxy.executeUpdate(ipClient,
           s"""
              |truncate table top_city_num
            """.stripMargin,
-          Array(null))
+          null)
         top3RDD.foreach(item => {
           ipSqlProxy.executeUpdate(ipClient,
             s"""
-               |insert into top_city_num (province,num)
+               |insert into top_city_num(province,num)
                | values(?,?)
            """.stripMargin,
             Array(item._1, item._2))
@@ -243,7 +250,7 @@ object PageStreaming {
       } catch {
         case e: Exception => e.printStackTrace()
       } finally {
-        sqlProxy.shutdown(client)
+        ipSqlProxy.shutdown(ipClient)
       }
     })
   }

@@ -125,7 +125,7 @@ object CourseLearnStreaming {
 
   /**
     * 各项业务指标计算
-    * 计算视频 有效时长  完成时长 总时长
+    * 计算视频 有效时长  完成时长 总时长   有效时长和完成时长的区别在播放倍速
     *
     * @param stream
     * @param filterDs
@@ -144,8 +144,8 @@ object CourseLearnStreaming {
             calcVideoTime(key, iters, sqlProxy, client) //计算视屏时长
           }
         } catch {
-          case e:Exception => e.printStackTrace()
-        }finally {
+          case e: Exception => e.printStackTrace()
+        } finally {
           sqlProxy.shutdown(client)
         }
 
@@ -166,12 +166,82 @@ object CourseLearnStreaming {
 
   /**
     * 统计各用户播放视频 有效时长 完成时长 总时长
+    *
     * @param key
     * @param iters
     * @param sqlProxy
     * @param client
     */
   def calcVideoTime(key: String, iters: Iterable[LearnModel], sqlProxy: SqlProxy, client: Connection) = {
+    val keys = key.split("_")
+    val userId = keys(0).toInt
+    val cwareId = keys(1).toInt
+    val videoId = keys(2).toInt
+    //1、拿到历史数据（同一用户同一课程同一个视屏下的的所有观看记录区间）
+    var interval_history = ""
+    sqlProxy.executeQuery(client,
+      s"""
+         |select
+         | play_interval
+         |from video_interval
+         |where userid=? and cwareid=? and videoid=?
+       """.stripMargin,
+      Array(userId, cwareId, videoId),
+      new QueryCallback {
+        override def process(rs: ResultSet): Unit = {
+          while (rs.next()) {
+            interval_history = rs.getString(1)
+          }
+        }
+      })
 
+    var effective_duration_sum = 0l //有效总时长
+    var complete_duration_sum = 0l //完成总时长
+    var cumulative_duration_sum = 0l //播放总时长
+
+    //2、根据历史数据和当前批次数据进行区间去重（这里要区分是否有历史数据）
+    val learnList: List[LearnModel] = iters.toList.sortBy(item => item.ps) //转成list 并根据开始区间升序排序
+    learnList.foreach(item => {
+      if (StringUtil.isEmpty(interval_history)) {
+        //没有历史区间
+        val play_interval = item.ps + "_" + item.pe //有效区间
+        val complate_duration = item.pe - item.ps //完成时长
+        val effective_duration = Math.ceil((item.te - item.ts) / 1000) //有效时长
+        effective_duration_sum += effective_duration.toLong
+        cumulative_duration_sum += effective_duration.toLong
+        cumulative_duration_sum += complate_duration
+        interval_history = play_interval
+      } else {
+        //有历史区间
+
+        //累计时长
+        val cumulative_duration = Math.ceil((item.te - item.ts) / 1000)
+        cumulative_duration_sum += cumulative_duration.toLong
+
+        //合并计算区间
+
+        //计算完成时长
+
+        //计算有效时长
+
+      }
+    })
+
+    //3、历史数据和本批次数据合并处理完更新会mysql 区间历史表+用户播放记录表
+    sqlProxy.executeUpdate(client,
+      s"""
+         |insert into video_interval(userid,cwareid,videoid,play_interval)
+         | values(?,?,?,?)
+         | on duplicate key update play_interval=?
+       """.stripMargin,
+      Array(userId, cwareId, videoId, interval_history, interval_history),
+    )
+    sqlProxy.executeUpdate(client,
+      s"""
+         |insert into video_learn_detail(userid,cwareid,videoid,totaltime,effecttime,completetime)
+         | values(?,?,?,?,?,?)
+         | on duplicate key update totaltime=totaltime+?, effecttime=effecttime+?, completetime=completetime+?
+       """.stripMargin,
+      Array(userId, cwareId, videoId, cumulative_duration_sum, effective_duration_sum, complete_duration_sum, cumulative_duration_sum, effective_duration_sum, complete_duration_sum))
   }
 }
