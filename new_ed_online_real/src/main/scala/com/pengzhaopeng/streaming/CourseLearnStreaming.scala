@@ -16,6 +16,7 @@ import org.apache.spark.streaming.dstream.{DStream, InputDStream}
 import org.apache.spark.streaming.kafka010._
 
 import scala.collection.mutable
+import scala.collection.mutable.ArrayBuffer
 
 /**
   * @author 17688700269
@@ -152,14 +153,125 @@ object CourseLearnStreaming {
       })
 
       //统计各章节下视屏播放总时长
+      rdd.mapPartitions(partition => {
+        partition.map(item => {
+          val totalTime = Math.ceil((item.te - item.ts) / 1000).toLong
+          val key = item.chapter_id
+          (key, totalTime)
+        })
+      }).reduceByKey(_ + _)
+        .foreachPartition(partitions => {
+          val sqlProxy = new SqlProxy
+          val client: Connection = DataSourceUtil.getConnection
+          try {
+            partitions.foreach(item => {
+              sqlProxy.executeUpdate(client,
+                s"""
+                   |insert into chapter_lear_detail(chapterid,totaltime)
+                   | vaules(?,?)
+                   | on duplicate key update totaltime=totaltime+?
+                 """.stripMargin,
+                Array(item._1, item._2, item._2))
+            })
+          } catch {
+            case e: Exception => e.printStackTrace()
+          } finally {
+            sqlProxy.shutdown(client)
+          }
+        })
 
       //统计各课件下视屏播放总时长
+      rdd.mapPartitions(partitions => {
+        partitions.map(item => {
+          val totalTime = Math.ceil((item.te - item.ts) / 1000).toLong
+          val key = item.cware_id
+          (key,totalTime)
+        })
+      }).reduceByKey(_+_)
+        .foreachPartition(partitons =>{
+          val sqlProxy = new SqlProxy
+          val client: Connection = DataSourceUtil.getConnection
+          try {
+            partitons.foreach(item => {
+              sqlProxy.executeUpdate(client,
+                s"""
+                  |insert into cwareid_learn_detail(cwareid,totaltime)
+                  | values(?,?)
+                  | on duplicate key update totaltime=totaltime+?
+               """.stripMargin,
+                Array(item._1,item._2,item._2))
+            })
+          } catch {
+            case e:Exception => e.printStackTrace()
+          } finally {
+            sqlProxy.shutdown(client)
+          }
+        })
 
-      //统计各辅导下的播放总时长
+      //统计辅导下的总播放时长
+      rdd.mapPartitions(partitions => {
+        partitions.map(item => {
+          val totaltime = Math.ceil((item.te - item.ts) / 1000).toLong
+          val key = item.edutype_id
+          (key, totaltime)
+        })
+      }).reduceByKey(_ + _).foreachPartition(partitions => {
+        val sqlProxy = new SqlProxy()
+        val client = DataSourceUtil.getConnection
+        try {
+          partitions.foreach(item => {
+            sqlProxy.executeUpdate(client, "insert into edutype_learn_detail(edutypeid,totaltime) values(?,?) on duplicate key " +
+              "update totaltime=totaltime+?", Array(item._1, item._2, item._2))
+          })
+        } catch {
+          case e: Exception => e.printStackTrace()
+        } finally {
+          sqlProxy.shutdown(client)
+        }
+      })
 
-      //统计各播放平台下的播放总时长
-
-      //统计同一科目下的播放总时长
+      //统计同一资源平台下的总播放时长
+      rdd.mapPartitions(partitions => {
+        partitions.map(item => {
+          val totaltime = Math.ceil((item.te - item.ts) / 1000).toLong
+          val key = item.source_type
+          (key, totaltime)
+        })
+      }).reduceByKey(_ + _).foreachPartition(partitions => {
+        val sqlProxy = new SqlProxy()
+        val client = DataSourceUtil.getConnection
+        try {
+          partitions.foreach(item => {
+            sqlProxy.executeUpdate(client, "insert into sourcetype_learn_detail (sourcetype_learn,totaltime) values(?,?) on duplicate key " +
+              "update totaltime=totaltime+?", Array(item._1, item._2, item._2))
+          })
+        } catch {
+          case e: Exception => e.printStackTrace()
+        } finally {
+          sqlProxy.shutdown(client)
+        }
+      })
+      // 统计同一科目下的播放总时长
+      rdd.mapPartitions(partitions => {
+        partitions.map(item => {
+          val totaltime = Math.ceil((item.te - item.ts) / 1000).toLong
+          val key = item.subject_id
+          (key, totaltime)
+        })
+      }).reduceByKey(_ + _).foreachPartition(partitons => {
+        val sqlProxy = new SqlProxy()
+        val clinet = DataSourceUtil.getConnection
+        try {
+          partitons.foreach(item => {
+            sqlProxy.executeUpdate(clinet, "insert into subject_learn_detail(subjectid,totaltime) values(?,?) on duplicate key " +
+              "update totaltime=totaltime+?", Array(item._1, item._2, item._2))
+          })
+        } catch {
+          case e: Exception => e.printStackTrace()
+        } finally {
+          sqlProxy.shutdown(clinet)
+        }
+      })
 
     })
   }
@@ -219,10 +331,15 @@ object CourseLearnStreaming {
         cumulative_duration_sum += cumulative_duration.toLong
 
         //合并计算区间
-
         //计算完成时长
+        val tuple = getEffectiveInterval(interval_history, item.ps, item.pe)
+        val complete_duration = tuple._1 //获取本次实际有效完成时长
+        complete_duration_sum += complete_duration
+        interval_history = tuple._2 //整合后的所有区间
 
         //计算有效时长
+        val effective_duration = Math.ceil((item.te - item.ts) / 1000) / (item.pe - item.ps) * complete_duration
+        effective_duration_sum += effective_duration.toLong
 
       }
     })
@@ -234,7 +351,7 @@ object CourseLearnStreaming {
          | values(?,?,?,?)
          | on duplicate key update play_interval=?
        """.stripMargin,
-      Array(userId, cwareId, videoId, interval_history, interval_history),
+      Array(userId, cwareId, videoId, interval_history, interval_history)
     )
     sqlProxy.executeUpdate(client,
       s"""
@@ -243,5 +360,121 @@ object CourseLearnStreaming {
          | on duplicate key update totaltime=totaltime+?, effecttime=effecttime+?, completetime=completetime+?
        """.stripMargin,
       Array(userId, cwareId, videoId, cumulative_duration_sum, effective_duration_sum, complete_duration_sum, cumulative_duration_sum, effective_duration_sum, complete_duration_sum))
+  }
+
+  /**
+    * 计算有效区间和完成时长
+    *
+    * @param interval_history
+    * @param ps
+    * @param pe
+    */
+  def getEffectiveInterval(interval_history: String, start: Int, end: Int) = {
+    //该区间的有效完成时间，用来叠加求总和，需要和历史区间去重再求总，若没有交集，则直接就是 end - start
+    var effective_duration = end - start
+    //先将所有区间段排序，先排首，首相同就排尾，让输出结果有序
+    val array: Array[String] = interval_history.split(",").sortBy(item => (item.split("-")(0).toInt, item.split("-")(1).toInt))
+    var isChangeDuration = false //是否对有效时间进行了修改，也就是是否进行了区间重组
+
+    //拿当前区间和历史区间去循环对比，匹配到了就跳出循环，分5种情况 (这个循环用来修改历史array的区间和计算当前区间的有效完成时间)
+    import scala.util.control.Breaks._
+    breakable {
+      for (i <- array.indices) {
+        //获取这段的开始播放和结束播放区间
+        var historyStart = 0
+        var historyEnd = 0
+        val item = array(i)
+        try {
+          historyStart = item.split("-")(0).toInt
+          historyEnd = item.split("-")(1).toInt
+        } catch {
+          case e: Exception => throw new Exception("error array:" + array.mkString(","))
+        }
+
+        //分五种情况 其中4种情况存在交集 另外一种不存在交集直接叠加
+        if (start >= historyStart && end <= historyEnd) {
+          //1、当前区间被已有的数据包含，此次区间无效不计
+          effective_duration = 0
+          isChangeDuration = true
+          break()
+        } else if (start <= historyStart && end > historyStart && end < historyEnd) {
+          //2、和已有区间左侧有交集
+          effective_duration = effective_duration - (end - historyStart)
+          isChangeDuration = true
+          array(i) = start + "-" + historyEnd
+          break()
+        } else if (start > historyStart && start < historyEnd && end > historyEnd) {
+          //3、和已有区间右侧存在交集
+          effective_duration = effective_duration - (historyEnd - start)
+          isChangeDuration = true
+          break()
+        } else if (start < historyStart && end > historyEnd) {
+          //4、现区间完全覆盖老区间，老区间就失效
+          effective_duration = effective_duration - (historyEnd - historyStart)
+          isChangeDuration = true
+          break()
+        }
+      }
+    }
+
+    //拿到更新后的array 重组区间并返回
+    // (这里经过上面的区间修改还可能会存在有交集的区间 比如原本有 10-30，40-60，重新一条新的变成10-50，40-60，就有交集了)
+    val result: String = isChangeDuration match {
+      case false => { //没有修改原 array 没有交集 直接新增
+        //没有修改原array 没有交集 进行新增
+        val distinctArray2 = ArrayBuffer[String]()
+        distinctArray2.appendAll(array)
+        distinctArray2.append(start + "-" + end)
+        val distinctArray = distinctArray2.distinct.sortBy(a => (a.split("-")(0).toInt, a.split("-")(1).toInt))
+        val tmpArray = ArrayBuffer[String]()
+        tmpArray.append(distinctArray(0))
+        for (i <- 1 until distinctArray.length) {
+          val item = distinctArray(i).split("-")
+          val tmpItem = tmpArray(tmpArray.length - 1).split("-")
+          val itemStart = item(0)
+          val itemEnd = item(1)
+          val tmpItemStart = tmpItem(0)
+          val tmpItemEnd = tmpItem(1)
+          if (tmpItemStart.toInt < itemStart.toInt && tmpItemEnd.toInt < itemStart.toInt) {
+            //没有交集
+            tmpArray.append(itemStart + "-" + itemEnd)
+          } else {
+            //有交集
+            val resultStart = tmpItemStart
+            val resultEnd = if (tmpItemEnd.toInt > itemEnd.toInt) tmpItemEnd else itemEnd
+            tmpArray(tmpArray.length - 1) = resultStart + "-" + resultEnd
+          }
+        }
+        val play_interval = tmpArray.sortBy(a => (a.split("-")(0).toInt, a.split("-")(1).toInt)).mkString(",")
+        play_interval
+      }
+      case true => {
+        //修改了原array 进行区间重组
+        val distinctArray = array.distinct.sortBy(a => (a.split("-")(0).toInt, a.split("-")(1).toInt))
+        val tmpArray = ArrayBuffer[String]()
+        tmpArray.append(distinctArray(0))
+        for (i <- 1 until distinctArray.length) {
+          val item = distinctArray(i).split("-")
+          val tmpItem = tmpArray(tmpArray.length - 1).split("-")
+          val itemStart = item(0)
+          val itemEnd = item(1)
+          val tmpItemStart = tmpItem(0)
+          val tmpItemEnd = tmpItem(1)
+          if (tmpItemStart.toInt < itemStart.toInt && tmpItemEnd.toInt < itemStart.toInt) {
+            //没有交集
+            tmpArray.append(itemStart + "-" + itemEnd)
+          } else {
+            //有交集
+            val resultStart = tmpItemStart
+            val resultEnd = if (tmpItemEnd.toInt > itemEnd.toInt) tmpItemEnd else itemEnd
+            tmpArray(tmpArray.length - 1) = resultStart + "-" + resultEnd
+          }
+        }
+        val play_interval = tmpArray.sortBy(a => (a.split("-")(0).toInt, a.split("-")(1).toInt)).mkString(",")
+        play_interval
+      }
+    }
+
+    (effective_duration, result)
   }
 }
